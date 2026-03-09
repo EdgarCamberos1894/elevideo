@@ -68,7 +68,8 @@ import java.lang.annotation.*;
                                                 "phase": "finished",
                                                 "processingMode": "SHORT_AUTO",
                                                 "platform": "INSTAGRAM",
-                                                "backgroundMode": "BLUR",
+                                                "backgroundMode": "BLURRED",
+                                                "quality": "HIGH"
                                                 "output": {
                                                   "videoUrl": "https://res.cloudinary.com/elevideo/video/upload/processed/abc.mp4",
                                                   "thumbnailUrl": "https://res.cloudinary.com/elevideo/image/upload/thumb/abc.jpg",

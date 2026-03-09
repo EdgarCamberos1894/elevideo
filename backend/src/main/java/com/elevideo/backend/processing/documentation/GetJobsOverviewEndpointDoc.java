@@ -61,6 +61,7 @@ import java.lang.annotation.*;
                                                 "processingMode": "FULL",
                                                 "platform": "YOUTUBE",
                                                 "backgroundMode": "KEEP",
+                                                "quality": "HIGH"
                                                 "output": null,
                                                 "errorDetail": null,
                                                 "createdAt": "2026-03-08T09:50:00"

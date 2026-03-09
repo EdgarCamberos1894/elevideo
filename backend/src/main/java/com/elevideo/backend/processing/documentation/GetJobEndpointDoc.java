@@ -57,6 +57,7 @@ import java.lang.annotation.*;
                                                     "processingMode": "SHORT_AUTO",
                                                     "platform": "INSTAGRAM",
                                                     "backgroundMode": "BLUR",
+                                                    "quality": "HIGH"
                                                     "output": null,
                                                     "errorDetail": null,
                                                     "createdAt": "2026-03-08T10:00:00"
