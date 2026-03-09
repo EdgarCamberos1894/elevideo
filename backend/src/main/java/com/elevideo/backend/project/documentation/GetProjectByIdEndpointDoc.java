@@ -46,6 +46,7 @@ import java.lang.annotation.*;
                                             "id": 1,
                                             "name": "Campaña de verano",
                                             "description": "Videos para la campaña Q3",
+                                            "videoCount": 3
                                             "createdAt": "2026-03-08T10:00:00",
                                             "updatedAt": "2026-03-08T10:00:00"
                                           }
