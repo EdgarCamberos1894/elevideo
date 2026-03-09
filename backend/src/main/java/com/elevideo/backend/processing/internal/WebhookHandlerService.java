@@ -49,7 +49,6 @@ public class WebhookHandlerService {
         }
 
         jobRepository.save(job);
-        log.info("✅ Webhook procesado para job '{}' — status: {}", request.jobId(), request.status());
     }
 
     @Transactional
