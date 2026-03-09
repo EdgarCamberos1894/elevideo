@@ -52,6 +52,10 @@ public class VideoRendition {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    private Quality quality;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private BackgroundMode backgroundMode;
 
     @Enumerated(EnumType.STRING)

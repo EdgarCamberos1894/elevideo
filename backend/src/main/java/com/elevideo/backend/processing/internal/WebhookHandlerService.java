@@ -73,6 +73,7 @@ public class WebhookHandlerService {
         VideoRendition rendition = renditionMapper.toVideoRendition(request);
         rendition.setVideoId(job.getVideoId());
         rendition.setPlatform(job.getPlatform());
+        rendition.setQuality(job.getQuality());
         rendition.setBackgroundMode(job.getBackgroundMode());
         rendition.setProcessingMode(job.getProcessingMode());
         return renditionRepository.save(rendition);

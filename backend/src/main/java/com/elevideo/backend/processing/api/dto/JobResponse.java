@@ -1,9 +1,6 @@
 package com.elevideo.backend.processing.api.dto;
 
-import com.elevideo.backend.processing.internal.model.BackgroundMode;
-import com.elevideo.backend.processing.internal.model.JobStatus;
-import com.elevideo.backend.processing.internal.model.Platform;
-import com.elevideo.backend.processing.internal.model.ProcessingMode;
+import com.elevideo.backend.processing.internal.model.*;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -38,6 +35,9 @@ public record JobResponse(
 
         @Schema(description = "Modo de background aplicado")
         BackgroundMode backgroundMode,
+
+        @Schema(description = "Calidad de procesamiento aplicada")
+        Quality quality,
 
         @Schema(description = "URLs de salida. Disponibles solo cuando status=COMPLETED.")
         JobOutput output,

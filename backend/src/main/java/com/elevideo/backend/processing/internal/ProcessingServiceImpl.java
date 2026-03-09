@@ -98,6 +98,7 @@ class ProcessingServiceImpl implements ProcessingService {
                 job.getProcessingMode(),
                 job.getPlatform(),
                 job.getBackgroundMode(),
+                job.getQuality(),
                 fromPython.output(),
                 fromPython.errorDetail(),
                 job.getCreatedAt()
