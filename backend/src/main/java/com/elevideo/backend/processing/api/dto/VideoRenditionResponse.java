@@ -16,5 +16,7 @@ public record VideoRenditionResponse(
         Platform       platform,
         Quality        quality,
         BackgroundMode backgroundMode,
+        Double         segmentStart,
+        Integer        segmentDuration,
         LocalDateTime  createdAt
 ) {}

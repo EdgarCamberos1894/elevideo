@@ -19,19 +19,19 @@ import java.lang.annotation.*;
         summary = "Obtener estado de un job",
         description = """
             Consulta el estado actualizado de un job de procesamiento.
-    
+            
             **Flujo de consulta:**
             1. El usuario envía la solicitud para consultar un job específico.
             2. El sistema valida que el job exista y pertenezca al usuario autenticado.
             3. Se consulta el estado actual del job en el microservicio de procesamiento Python.
-            4. Los campos `progress`, `status` y `phase` se actualizan localmente.
-            5. Si el job está **COMPLETED**, el campo `output` contiene las URLs generadas.
-            6. Si el job está **FAILED**, el campo `errorDetail` contiene la causa del error.
-    
+            4. Los campos progress, status y phase se actualizan localmente.
+            5. Si el job está **COMPLETED**, el campo output contiene las URLs generadas.
+            6. Si el job está **FAILED**, el campo errorDetail contiene la causa del error.
+            
             **Nota:**
             - Este endpoint está diseñado para implementar **polling de estado**
               después de iniciar un job de procesamiento.
-    
+            
             **Requiere:** Authorization: Bearer {token}
             """
 )
