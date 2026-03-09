@@ -6,6 +6,7 @@ import com.elevideo.backend.project.api.dto.ProjectRequest;
 import com.elevideo.backend.project.api.dto.ProjectResponse;
 import com.elevideo.backend.project.internal.model.Project;
 import com.elevideo.backend.shared.security.CurrentUserProvider;
+import com.elevideo.backend.video.api.VideoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ class ProjectServiceImpl implements ProjectService {
     private final ProjectMapper       projectMapper;
     private final CurrentUserProvider currentUserProvider;
 
+
     @Override
     @Transactional
     public ProjectResponse create(ProjectRequest request) {
@@ -29,7 +31,7 @@ class ProjectServiceImpl implements ProjectService {
         Project project = projectMapper.toEntity(request);
         project.setUserId(userId);
 
-        return projectMapper.toResponse(projectRepository.save(project));
+        return projectMapper.toResponse(projectRepository.save(project), 0L);
     }
 
     @Override
@@ -38,14 +40,18 @@ class ProjectServiceImpl implements ProjectService {
         UUID userId = currentUserProvider.getCurrentUserId();
         return projectRepository
                 .findByUserId(userId, pageable.toPageable())
-                .map(projectMapper::toResponse);
+                .map(project -> projectMapper.toResponse(
+                        project,
+                        projectRepository.countVideosByProjectId(project.getId())
+                ));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ProjectResponse getById(Long projectId) {
-        UUID userId = currentUserProvider.getCurrentUserId();
-        return projectMapper.toResponse(findOwnedProject(projectId, userId));
+        UUID    userId  = currentUserProvider.getCurrentUserId();
+        Project project = findOwnedProject(projectId, userId);
+        return projectMapper.toResponse(project, projectRepository.countVideosByProjectId(projectId));
     }
 
     @Override
@@ -55,7 +61,8 @@ class ProjectServiceImpl implements ProjectService {
         Project project = findOwnedProject(projectId, userId);
 
         projectMapper.updateEntity(request, project);
-        return projectMapper.toResponse(projectRepository.save(project));
+        Project saved = projectRepository.save(project);
+        return projectMapper.toResponse(saved, projectRepository.countVideosByProjectId(projectId));
     }
 
     @Override
