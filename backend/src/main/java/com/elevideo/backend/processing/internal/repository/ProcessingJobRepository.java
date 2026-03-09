@@ -26,5 +26,7 @@ public interface ProcessingJobRepository
             @Param("videoId") Long   videoId
     );
 
+    Optional<ProcessingJob> findByVideoRenditionId(Long renditionId);
+
     boolean existsByVideoId(Long videoId);
 }
