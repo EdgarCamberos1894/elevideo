@@ -26,7 +26,7 @@ public record VideoResponse(
         String format,
 
         @Schema(description = "Duración en milisegundos", example = "120000")
-        Long durationInMillis,
+        Long durationInSeconds,
 
         @Schema(description = "Tamaño del archivo en bytes", example = "10485760")
         Long sizeInBytes,

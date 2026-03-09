@@ -71,14 +71,14 @@ class CloudinaryStorageAdapter implements VideoStoragePort {
 
     private CloudinaryUploadResponse toUploadRes(Map<String, Object> result) {
         return CloudinaryUploadResponse.builder()
-                .publicId(       (String)  result.get("public_id"))
-                .secureUrl(      (String)  result.get("secure_url"))
-                .format(         (String)  result.get("format"))
-                .durationInMillis(toDouble(result.get("duration")))
-                .sizeInBytes(    toLong(   result.get("bytes")))
-                .width(          toInt(    result.get("width")))
-                .height(         toInt(    result.get("height")))
-                .resourceType(   (String)  result.get("resource_type"))
+                .publicId(          (String)  result.get("public_id"))
+                .secureUrl(         (String)  result.get("secure_url"))
+                .format(            (String)  result.get("format"))
+                .durationInSeconds( toDouble(result.get("duration")))
+                .sizeInBytes(       toLong(   result.get("bytes")))
+                .width(             toInt(    result.get("width")))
+                .height(            toInt(    result.get("height")))
+                .resourceType(      (String)  result.get("resource_type"))
                 .build();
     }
 
