@@ -117,8 +117,8 @@ elevideo/
 Cada servicio tiene su propio README con instrucciones detalladas de instalación y configuración:
 
 - 📖 [README — Backend](./backend/README.md)
-- 📖 [README — Frontend](./frontend/README.md)
-- 📖 [README — Microservicio Python](./video-processor/README.md)
+- 📖 [README — Frontend](./Frontend/README.md)
+- 📖 [README — Microservicio Python](./elevideo-processor/README.md)
 
 ---
 
