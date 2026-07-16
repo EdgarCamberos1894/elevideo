@@ -11,7 +11,7 @@ import org.mapstruct.Mapping;
 interface VideoMapper {
 
     @Mapping(target = "status",          expression = "java(VideoStatus.UPLOADED)")
-    @Mapping(target = "durationInMillis", expression = "java(uploadRes.durationInMillis() == null ? null : uploadRes.durationInMillis().longValue())")
+    @Mapping(target = "durationInSeconds", expression = "java(uploadRes.durationInSeconds() == null ? null : uploadRes.durationInSeconds().longValue())")
     @Mapping(target = "title",           source = "title")
     Video toVideo(String title, CloudinaryUploadResponse uploadRes);
 

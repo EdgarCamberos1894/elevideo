@@ -18,25 +18,25 @@ import java.lang.annotation.*;
 @Operation(
         summary = "Resumen de jobs del video",
         description = """
-        Devuelve una vista resumida de los jobs asociados a un video.
-
-        **Flujo de consulta:**
-        1. El usuario solicita el resumen de jobs para un video específico.
-        2. El sistema valida que el video pertenezca al usuario autenticado.
-        3. Se recuperan los jobs activos del video.
-        4. Se recuperan los últimos jobs finalizados.
-        5. La API devuelve ambos conjuntos en una sola respuesta.
-
-        **Contenido de la respuesta:**
-        - `active` — jobs en estado **PENDING** o **PROCESSING** (máximo 50).
-        - `finished` — últimos **10 jobs** en estado **COMPLETED**, **FAILED** o **CANCELLED**.
-
-        **Nota:**
-        - Este endpoint está diseñado para la vista principal del **dashboard**.
-        - Permite evitar realizar múltiples solicitudes para obtener jobs activos y finalizados.
-
-        **Requiere:** Authorization: Bearer {token}
-        """
+            Devuelve una vista resumida de los jobs asociados a un video.
+            
+            **Flujo de consulta:**
+            1. El usuario solicita el resumen de jobs para un video específico.
+            2. El sistema valida que el video pertenezca al usuario autenticado.
+            3. Se recuperan los jobs activos del video.
+            4. Se recuperan los últimos jobs finalizados.
+            5. La API devuelve ambos conjuntos en una sola respuesta.
+            
+            **Contenido de la respuesta:**
+            - active — jobs en estado **PENDING** o **PROCESSING** (máximo 50).
+            - finished — últimos **10 jobs** en estado **COMPLETED**, **FAILED** o **CANCELLED**.
+            
+            **Nota:**
+            - Este endpoint está diseñado para la vista principal del **dashboard**.
+            - Permite evitar realizar múltiples solicitudes para obtener jobs activos y finalizados.
+            
+            **Requiere:** Authorization: Bearer {token}
+            """
 )
 @ApiResponses(value = {
         @ApiResponse(
@@ -61,6 +61,7 @@ import java.lang.annotation.*;
                                                 "processingMode": "FULL",
                                                 "platform": "YOUTUBE",
                                                 "backgroundMode": "KEEP",
+                                                "quality": "HIGH"
                                                 "output": null,
                                                 "errorDetail": null,
                                                 "createdAt": "2026-03-08T09:50:00"

@@ -1,73 +1,67 @@
-# React + TypeScript + Vite
+# EleVideo Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend del proyecto **EleVideo**, desarrollado en **React.js** con **JavaScript**, utilizando **CRACO** y **Tailwind CSS**.  
+El proyecto está organizado de manera modular con componentes, hooks y contexto global para facilitar escalabilidad y mantenibilidad.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Tecnologías principales
 
-## React Compiler
+- **React.js** – Librería para construir interfaces de usuario reactivas.
+- **JavaScript (ES6+)** – Lenguaje principal del proyecto.
+- **CRACO** – Configuración de React sin eject.
+- **Tailwind CSS** – Framework CSS utilitario para estilos rápidos y consistentes.
+- **PostCSS** – Procesamiento y optimización de CSS.
+- **Git** – Control de versiones.
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+---
 
-## Expanding the ESLint configuration
+## Instalación
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Clona el repositorio:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+git clone https://github.com/No-Country-simulation/EleVideo.git
+cd Frontend
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+##Instala las dependencias:
+```bash
+npm install
 ```
+
+##Scripts disponibles
+Levantar servidor de desarrollo:
+```bash
+npm start
+```
+
+Construir la aplicación para producción:
+```bash
+npm run build
+```
+
+##Estructura de carpetas
+```
+Frontend/
+│
+├─ public/                 # Archivos estáticos (HTML, imágenes, favicon)
+├─ src/
+│  ├─ api/                 # Llamadas a servicios externos
+│  ├─ components/          # Componentes reutilizables
+│  ├─ context/             # Contextos de React para estado global
+│  ├─ hooks/               # Custom hooks
+│  ├─ lib/                 # Librerías internas o utilidades
+│  ├─ pages/               # Páginas principales de la aplicación
+│  ├─ App.js               # Componente principal
+│  └─ index.js             # Punto de entrada de React
+├─ tailwind.config.js      # Configuración de Tailwind
+├─ postcss.config.js       # Configuración de PostCSS
+├─ craco.config.js         # Configuración de CRACO
+├─ package.json            # Dependencias y scripts
+└─ package-lock.json       # Control de versiones de dependencias
+```
+
+## Licencia
+
+Este proyecto se encuentra bajo la licencia **MIT**.

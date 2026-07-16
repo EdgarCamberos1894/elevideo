@@ -18,20 +18,20 @@ import java.lang.annotation.*;
 @Operation(
         summary = "Cancelar job",
         description = """
-        Solicita la cancelación de un job de procesamiento activo.
-
-        **Flujo de cancelación:**
-        1. El usuario envía la solicitud de cancelación para un job específico.
-        2. El sistema valida que el job exista y pertenezca al usuario autenticado.
-        3. Se envía una solicitud de cancelación al microservicio de procesamiento.
-        4. El estado del job se actualiza cuando el sistema de procesamiento confirma la cancelación.
-
-        **Nota:**
-        - La cancelación es una solicitud, no una garantía inmediata.
-        - El estado final del job puede consultarse mediante `GET /api/v1/jobs/{jobId}`.
-
-        **Requiere:** Authorization: Bearer {token}
-        """
+            Solicita la cancelación de un job de procesamiento activo.
+            
+            **Flujo de cancelación:**
+            1. El usuario envía la solicitud de cancelación para un job específico.
+            2. El sistema valida que el job exista y pertenezca al usuario autenticado.
+            3. Se envía una solicitud de cancelación al microservicio de procesamiento.
+            4. El estado del job se actualiza cuando el sistema de procesamiento confirma la cancelación.
+            
+            **Nota:**
+            - La cancelación es una solicitud, no una garantía inmediata.
+            - El estado final del job puede consultarse mediante GET /api/v1/jobs/{jobId}.
+            
+            **Requiere:** Authorization: Bearer {token}
+            """
 )
 @ApiResponses(value = {
         @ApiResponse(

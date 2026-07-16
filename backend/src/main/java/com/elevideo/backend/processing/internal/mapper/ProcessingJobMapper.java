@@ -37,6 +37,7 @@ public interface ProcessingJobMapper {
     @Mapping(target = "processingMode",      ignore = true)
     @Mapping(target = "platform",            ignore = true)
     @Mapping(target = "backgroundMode",      ignore = true)
+    @Mapping(target = "quality",             ignore = true)
     @Mapping(target = "errorDetail",         source = "errorDetail")
     @Mapping(target = "createdAt",           source = "createdAt")
     JobResponse toJobResponse(VideoJobStatusResponse response);

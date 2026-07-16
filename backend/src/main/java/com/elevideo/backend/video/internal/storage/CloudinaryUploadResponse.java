@@ -12,7 +12,7 @@ public record CloudinaryUploadResponse(
         String  secureUrl,
         String  format,
         Long    sizeInBytes,
-        Double  durationInMillis,
+        Double  durationInSeconds,
         Integer width,
         Integer height,
         String  resourceType

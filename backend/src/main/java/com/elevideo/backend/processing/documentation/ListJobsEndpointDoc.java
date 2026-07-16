@@ -18,33 +18,33 @@ import java.lang.annotation.*;
 @Operation(
         summary = "Listar jobs del video",
         description = """
-        Devuelve una lista paginada de jobs de procesamiento asociados a un video.
-
-        **Flujo de listado:**
-        1. El usuario solicita la lista de jobs de procesamiento para un video.
-        2. El sistema valida que el video pertenezca al usuario autenticado.
-        3. Se aplican los filtros opcionales enviados en los parámetros de query.
-        4. Los resultados se ordenan y paginan según los parámetros indicados.
-        5. La API devuelve la página de jobs solicitada.
-
-        **Filtros opcionales:**
-        - `status` — filtra por estado del job (multi-valor): `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `CANCELLED`
-        - `processingMode` — filtra por modo de procesamiento: `SHORT_AUTO`, `SHORT_MANUAL`, `FULL`
-        - `platform` — filtra por plataforma destino: `INSTAGRAM`, `TIKTOK`, `YOUTUBE`, etc.
-        - `backgroundMode` — filtra por modo de fondo: `BLUR`, `REMOVE`, `KEEP`
-
-        **Parámetros de paginación:**
-        - `page` — número de página (base 0)
-        - `size` — cantidad de elementos por página
-        - `sortBy` — campo de ordenamiento
-        - `sortDirection` — dirección del orden (`ASC` o `DESC`)
-
-        **Valores por defecto:**
-        - ordenamiento: `createdAt DESC`
-        - tamaño de página: `10`
-
-        **Requiere:** Authorization: Bearer {token}
-        """
+            Devuelve una lista paginada de jobs de procesamiento asociados a un video.
+            
+            **Flujo de listado:**
+            1. El usuario solicita la lista de jobs de procesamiento para un video.
+            2. El sistema valida que el video pertenezca al usuario autenticado.
+            3. Se aplican los filtros opcionales enviados en los parámetros de query.
+            4. Los resultados se ordenan y paginan según los parámetros indicados.
+            5. La API devuelve la página de jobs solicitada.
+            
+            **Filtros opcionales:**
+            - status — filtra por estado del job (multi-valor): PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+            - processingMode — filtra por modo de procesamiento: SHORT_AUTO, SHORT_MANUAL, FULL
+            - platform — filtra por plataforma destino: INSTAGRAM, TIKTOK, YOUTUBE, etc.
+            - backgroundMode — filtra por modo de fondo: BLUR, REMOVE, KEEP
+            
+            **Parámetros de paginación:**
+            - page — número de página (base 0)
+            - size — cantidad de elementos por página
+            - sortBy — campo de ordenamiento
+            - sortDirection — dirección del orden (ASC o DESC)
+            
+            **Valores por defecto:**
+            - ordenamiento: createdAt DESC
+            - tamaño de página: 10
+            
+            **Requiere:** Authorization: Bearer {token}
+            """
 )
 @ApiResponses(value = {
         @ApiResponse(
@@ -68,7 +68,8 @@ import java.lang.annotation.*;
                                                 "phase": "finished",
                                                 "processingMode": "SHORT_AUTO",
                                                 "platform": "INSTAGRAM",
-                                                "backgroundMode": "BLUR",
+                                                "backgroundMode": "BLURRED",
+                                                "quality": "HIGH"
                                                 "output": {
                                                   "videoUrl": "https://res.cloudinary.com/elevideo/video/upload/processed/abc.mp4",
                                                   "thumbnailUrl": "https://res.cloudinary.com/elevideo/image/upload/thumb/abc.jpg",

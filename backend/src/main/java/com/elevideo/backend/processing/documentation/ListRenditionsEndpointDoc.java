@@ -18,32 +18,32 @@ import java.lang.annotation.*;
 @Operation(
         summary = "Listar renditions del video",
         description = """
-        Devuelve una lista paginada de las renditions procesadas asociadas a un video.
-
-        **Flujo de listado:**
-        1. El usuario solicita la lista de renditions para un video específico.
-        2. El sistema valida que el video pertenezca al usuario autenticado.
-        3. Se aplican los filtros opcionales enviados en los parámetros de query.
-        4. Los resultados se ordenan y paginan según los parámetros indicados.
-        5. La API devuelve la página de renditions solicitada.
-
-        **Filtros opcionales:**
-        - `processingMode` — filtra por modo de procesamiento: `SHORT_AUTO`, `SHORT_MANUAL`, `FULL`
-        - `platform` — filtra por plataforma destino: `INSTAGRAM`, `TIKTOK`, `YOUTUBE`, etc.
-        - `backgroundMode` — filtra por modo de fondo: `BLUR`, `REMOVE`, `KEEP`
-
-        **Parámetros de paginación:**
-        - `page` — número de página (base 0)
-        - `size` — cantidad de elementos por página
-        - `sortBy` — campo de ordenamiento
-        - `sortDirection` — dirección del orden (`ASC` o `DESC`)
-
-        **Valores por defecto:**
-        - ordenamiento: `createdAt DESC`
-        - tamaño de página: `20`
-
-        **Requiere:** Authorization: Bearer {token}
-        """
+            Devuelve una lista paginada de las renditions procesadas asociadas a un video.
+            
+            **Flujo de listado:**
+            1. El usuario solicita la lista de renditions para un video específico.
+            2. El sistema valida que el video pertenezca al usuario autenticado.
+            3. Se aplican los filtros opcionales enviados en los parámetros de query.
+            4. Los resultados se ordenan y paginan según los parámetros indicados.
+            5. La API devuelve la página de renditions solicitada.
+            
+            **Filtros opcionales:**
+            - processingMode — filtra por modo de procesamiento: SHORT_AUTO, SHORT_MANUAL, FULL
+            - platform — filtra por plataforma destino: INSTAGRAM, TIKTOK, YOUTUBE, etc.
+            - backgroundMode — filtra por modo de fondo: BLUR, REMOVE, KEEP
+            
+            **Parámetros de paginación:**
+            - page — número de página (base 0)
+            - size — cantidad de elementos por página
+            - sortBy — campo de ordenamiento
+            - sortDirection — dirección del orden (ASC o DESC)
+            
+            **Valores por defecto:**
+            - ordenamiento: createdAt DESC
+            - tamaño de página: 20
+            
+            **Requiere:** Authorization: Bearer {token}
+            """
 )
 @ApiResponses(value = {
         @ApiResponse(
@@ -67,7 +67,10 @@ import java.lang.annotation.*;
                                                 "previewUrl": "https://res.cloudinary.com/elevideo/video/upload/preview/abc.mp4",
                                                 "processingMode": "SHORT_AUTO",
                                                 "platform": "INSTAGRAM",
-                                                "backgroundMode": "BLUR",
+                                                "quality": "HIGH",
+                                                "backgroundMode": "BLURRED",
+                                                "segmentStart": 0.0,
+                                                "segmentDuration": 20,
                                                 "createdAt": "2026-03-08T11:00:00"
                                               }
                                             ],

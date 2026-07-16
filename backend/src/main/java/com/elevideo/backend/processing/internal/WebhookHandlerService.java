@@ -49,7 +49,6 @@ public class WebhookHandlerService {
         }
 
         jobRepository.save(job);
-        log.info("✅ Webhook procesado para job '{}' — status: {}", request.jobId(), request.status());
     }
 
     @Transactional
@@ -74,6 +73,7 @@ public class WebhookHandlerService {
         VideoRendition rendition = renditionMapper.toVideoRendition(request);
         rendition.setVideoId(job.getVideoId());
         rendition.setPlatform(job.getPlatform());
+        rendition.setQuality(job.getQuality());
         rendition.setBackgroundMode(job.getBackgroundMode());
         rendition.setProcessingMode(job.getProcessingMode());
         return renditionRepository.save(rendition);

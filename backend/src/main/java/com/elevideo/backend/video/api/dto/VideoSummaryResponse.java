@@ -9,7 +9,7 @@ public record VideoSummaryResponse(
         String        title,
         String        secureUrl,
         String        format,
-        Long          durationInMillis,
+        Long          durationInSeconds,
         Long          sizeInBytes,
         Integer       width,
         Integer       height,

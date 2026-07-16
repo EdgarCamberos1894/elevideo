@@ -14,6 +14,7 @@ public interface VideoRenditionMapper {
     @Mapping(target = "id",          ignore = true)
     @Mapping(target = "createdAt",   ignore = true)
     @Mapping(target = "processingMode", source = "processingMode")
+    @Mapping(target = "durationSeconds", source = "outputDurationSeconds")
     VideoRendition toVideoRendition(ProcessingJobWebhookRequest request);
 
     VideoRenditionResponse toVideoRenditionResponse(VideoRendition entity);

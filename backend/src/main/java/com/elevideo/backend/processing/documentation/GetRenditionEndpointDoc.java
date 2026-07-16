@@ -52,7 +52,8 @@ import java.lang.annotation.*;
                                             "previewUrl": "https://res.cloudinary.com/elevideo/video/upload/preview/abc.mp4",
                                             "processingMode": "SHORT_AUTO",
                                             "platform": "INSTAGRAM",
-                                            "backgroundMode": "BLUR",
+                                            "quality": "HIGH"
+                                            "backgroundMode": "BLURRED",
                                             "createdAt": "2026-03-08T11:00:00"
                                           }
                                         }

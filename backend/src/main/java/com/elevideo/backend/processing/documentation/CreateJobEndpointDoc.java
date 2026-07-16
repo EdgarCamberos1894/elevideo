@@ -21,56 +21,56 @@ import java.lang.annotation.*;
 @Operation(
         summary = "Iniciar job de procesamiento",
         description = """
-        Inicia el procesamiento de un video y crea un job asíncrono.
-
-        **Flujo de procesamiento:**
-        1. El usuario envía una solicitud de procesamiento para un video existente.
-        2. El sistema valida que el video pertenezca al usuario autenticado.
-        3. Se crea un registro de job en el sistema con los parámetros enviados.
-        4. La solicitud se envía al microservicio de procesamiento Python.
-        5. La API devuelve un `statusUrl` que permite consultar el estado del procesamiento.
-
-        **Nota:**
-        - El procesamiento es asíncrono, por lo que la API devuelve `202 Accepted`.
-        - El estado del job puede consultarse mediante `GET /api/v1/jobs/{jobId}`.
-
-        ---
-
-        **Modos de procesamiento (`processingMode`):**
-
-        - **vertical** — convierte el video completo a formato vertical 9:16 con recorte inteligente.
-        - **short_auto** — extrae automáticamente el mejor segmento del video.
-          Requiere `shortAutoDuration` entre **5 y 60 segundos**.
-        - **short_manual** — extrae un segmento específico definido por el usuario.
-          Requiere `shortOptions.startTime` y `shortOptions.duration`.
-
-        **Campos requeridos:**
-        - `processingMode`
-        - `platform`
-        - `quality`
-        - `backgroundMode`
-
-        **Campos condicionales:**
-        - `shortAutoDuration` — requerido si `processingMode = short_auto`
-        - `shortOptions` — requerido si `processingMode = short_manual`
-        - `advancedOptions` — opcional en todos los modos
-
-        ---
-
-        **Valores válidos:**
-
-        | Campo | Valores |
-        |---|---|
-        | `processingMode` | `vertical`, `short_auto`, `short_manual` |
-        | `platform` | `tiktok`, `instagram`, `youtube_shorts` |
-        | `quality` | `fast`, `normal`, `high` |
-        | `backgroundMode` | `smart_crop`, `blurred`, `black` |
-
-        **Respuesta:**
-        - **202 Accepted** — job de procesamiento iniciado correctamente.
-
-        **Requiere:** Authorization: Bearer {token}
-        """
+            Inicia el procesamiento de un video y crea un job asíncrono.
+            
+            **Flujo de procesamiento:**
+            1. El usuario envía una solicitud de procesamiento para un video existente.
+            2. El sistema valida que el video pertenezca al usuario autenticado.
+            3. Se crea un registro de job en el sistema con los parámetros enviados.
+            4. La solicitud se envía al microservicio de procesamiento Python.
+            5. La API devuelve un statusUrl que permite consultar el estado del procesamiento.
+            
+            **Nota:**
+            - El procesamiento es asíncrono, por lo que la API devuelve 202 Accepted.
+            - El estado del job puede consultarse mediante GET /api/v1/jobs/{jobId}.
+            
+            ---
+            
+            **Modos de procesamiento (processingMode):**
+            
+            - **vertical** — convierte el video completo a formato vertical 9:16 con recorte inteligente.
+            - **short_auto** — extrae automáticamente el mejor segmento del video.  
+              Requiere shortAutoDuration entre **5 y 60 segundos**.
+            - **short_manual** — extrae un segmento específico definido por el usuario.  
+              Requiere shortOptions.startTime y shortOptions.duration.
+            
+            **Campos requeridos:**
+            - processingMode
+            - platform
+            - quality
+            - backgroundMode
+            
+            **Campos condicionales:**
+            - shortAutoDuration — requerido si processingMode = short_auto
+            - shortOptions — requerido si processingMode = short_manual
+            - advancedOptions — opcional en todos los modos
+            
+            ---
+            
+            **Valores válidos:**
+            
+            | Campo | Valores |
+            |---|---|
+            | processingMode | vertical, short_auto, short_manual |
+            | platform | tiktok, instagram, youtube_shorts |
+            | quality | fast, normal, high |
+            | backgroundMode | smart_crop, blurred, black |
+            
+            **Respuesta:**
+            - **202 Accepted** — job de procesamiento iniciado correctamente.
+            
+            **Requiere:** Authorization: Bearer {token}
+            """
 )
 @RequestBody(
         description = "Configuración del procesamiento según el modo seleccionado",

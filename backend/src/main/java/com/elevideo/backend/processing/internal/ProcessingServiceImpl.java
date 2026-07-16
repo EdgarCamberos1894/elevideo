@@ -83,14 +83,11 @@ class ProcessingServiceImpl implements ProcessingService {
                 "/api/video/status/" + jobId, VideoJobStatusResponse.class, userId
         );
 
-        // Actualiza campos mutables en la entidad local
         job.setProgressPercent(pythonResponse.progress());
         job.setStatus(JobStatus.fromValue(pythonResponse.status()));
         job.setPhase(pythonResponse.phase());
         jobRepository.save(job);
 
-        // El mapper de Python no conoce processingMode/platform/backgroundMode (no los devuelve).
-        // Los enriquecemos desde la entidad local, que sí los tiene persistidos.
         JobResponse fromPython = jobMapper.toJobResponse(pythonResponse);
 
         return new JobResponse(
@@ -101,6 +98,7 @@ class ProcessingServiceImpl implements ProcessingService {
                 job.getProcessingMode(),
                 job.getPlatform(),
                 job.getBackgroundMode(),
+                job.getQuality(),
                 fromPython.output(),
                 fromPython.errorDetail(),
                 job.getCreatedAt()
@@ -149,6 +147,13 @@ class ProcessingServiceImpl implements ProcessingService {
         assertVideoAccess(videoId);
         VideoRendition rendition = renditionRepository.findByIdAndVideoId(renditionId, videoId)
                 .orElseThrow(() -> new RenditionNotFoundException(renditionId));
+
+        jobRepository.findByVideoRenditionId(renditionId)
+                .ifPresent(job -> {
+                    job.setVideoRendition(null);
+                    jobRepository.save(job);
+                });
+
         renditionRepository.delete(rendition);
     }
 
@@ -196,7 +201,6 @@ class ProcessingServiceImpl implements ProcessingService {
     /**
      * Verifica que el video exista y pertenezca al usuario autenticado.
      * Lanza NotFoundException o ForbiddenException si no se cumple.
-     * Se llama al inicio de cada método público para garantizar acceso consistente.
      */
     private void assertVideoAccess(Long videoId) {
         UUID userId = currentUserProvider.getCurrentUserId();

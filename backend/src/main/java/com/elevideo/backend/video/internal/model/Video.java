@@ -29,7 +29,7 @@ public class Video {
     private String format;
 
     @Column(nullable = false)
-    private Long durationInMillis;
+    private Long durationInSeconds;
 
     private Long    sizeInBytes;
     private Integer width;

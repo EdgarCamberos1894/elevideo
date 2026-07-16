@@ -18,20 +18,20 @@ import java.lang.annotation.*;
 @Operation(
         summary = "Eliminar rendition",
         description = """
-        Elimina permanentemente una rendition de video.
-
-        **Flujo de eliminación:**
-        1. El usuario envía la solicitud para eliminar una rendition específica.
-        2. El sistema valida que la rendition exista y pertenezca al usuario autenticado.
-        3. Se elimina el archivo procesado del almacenamiento.
-        4. Se elimina el registro de la rendition del sistema.
-
-        **Advertencia:**
-        - Esta operación es irreversible.
-        - El archivo procesado también se eliminará del almacenamiento.
-
-        **Requiere:** Authorization: Bearer {token}
-        """
+            Elimina permanentemente una rendition de video.
+            
+            **Flujo de eliminación:**
+            1. El usuario envía la solicitud para eliminar una rendition específica.
+            2. El sistema valida que la rendition exista y pertenezca al usuario autenticado.
+            3. Se elimina el archivo procesado del almacenamiento.
+            4. Se elimina el registro de la rendition del sistema.
+            
+            **Advertencia:**
+            - Esta operación es irreversible.
+            - El archivo procesado también se eliminará del almacenamiento.
+            
+            **Requiere:** Authorization: Bearer {token}
+            """
 )
 @ApiResponses(value = {
         @ApiResponse(
