@@ -62,13 +62,13 @@ Elevideo está compuesto por tres servicios independientes que se comunican entr
                             │ HTTPS
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│              Frontend  (React + Tailwind CSS)            │
+│              Frontend  (React + Tailwind CSS)           │
 │                   elevideo.vercel.app                   │
 └───────────────────────────┬─────────────────────────────┘
                             │ REST API + JWT
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│           Backend Spring Boot  (Monolito Modular)        │
+│           Backend Spring Boot  (Monolito Modular)       │
 │             elevideo-ec.onrender.com                    │
 │                                                         │
 │   auth │ user │ project │ video │ processing │ notif.   │
