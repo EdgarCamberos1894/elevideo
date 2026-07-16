@@ -25,12 +25,17 @@ git clone https://github.com/No-Country-simulation/EleVideo.git
 cd Frontend
 ```
 
-##Instala las dependencias:
+## Instala las dependencias
 ```bash
 npm install
 ```
 
-##Scripts disponibles
+## Configura el entorno
+```bash
+cp .env.example .env
+```
+
+## Scripts disponibles
 Levantar servidor de desarrollo:
 ```bash
 npm start
@@ -41,7 +46,7 @@ Construir la aplicación para producción:
 npm run build
 ```
 
-##Estructura de carpetas
+## Estructura de carpetas
 ```
 Frontend/
 │

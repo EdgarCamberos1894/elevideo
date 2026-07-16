@@ -18,7 +18,7 @@ Detecta rostros automáticamente, aplica smart crop con estabilización cinemato
 
 ```bash
 git clone <repo>
-cd video-processor-api
+cd elevideo-processor
 
 python -m venv .venv
 source .venv/bin/activate      # Linux/macOS
