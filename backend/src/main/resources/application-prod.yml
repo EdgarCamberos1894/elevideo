@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    hikari:
+      schema: ${DB_SCHEMA:elevideo}
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:2}
+      minimum-idle: ${DB_POOL_MIN_IDLE:0}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT_MS:300000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1200000}
+      pool-name: ${spring.application.name}-pool
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        default_schema: ${DB_SCHEMA:elevideo}
+
+logging:
+  level:
+    org.hibernate.SQL: WARN
+    org.hibernate.type: WARN
+    org.hibernate.stat: WARN
