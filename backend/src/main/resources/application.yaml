@@ -13,6 +13,13 @@ spring:
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      schema: elevideo
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:2}
+      minimum-idle: ${DB_POOL_MIN_IDLE:0}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT_MS:300000}
+      pool-name: ${spring.application.name}-pool
 
   jpa:
     hibernate:
@@ -22,6 +29,8 @@ spring:
       hibernate:
         format_sql: false
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: elevideo
+        hbm2ddl.create_namespaces: true
 
 server:
   port: ${PORT:8081}
