@@ -46,6 +46,8 @@ security:
 
 
 app:
+  demo:
+    enabled: ${DEMO_MODE_ENABLED:true}
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
     verify-email-path: ${FRONTEND_VERIFY_EMAIL_PATH:/verify-email}

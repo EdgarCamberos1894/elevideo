@@ -17,6 +17,11 @@ const loginSchema = z.object({
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
 });
 
+const demoCredentials = {
+  email: 'demo@elevideo.app',
+  password: 'Demo123!',
+};
+
 export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -167,6 +172,25 @@ export function LoginPage() {
                     Regístrate gratis
                   </Link>
                 </p>
+                <section className="w-full border-t border-border/60 pt-4" aria-labelledby="elevideo-demo-title">
+                  <div className="space-y-1 text-left">
+                    <p id="elevideo-demo-title" className="text-sm font-semibold">
+                      Acceso de demostración
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {demoCredentials.email} · Contraseña: {demoCredentials.password}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-3 w-full"
+                    onClick={() => form.reset(demoCredentials)}
+                    data-testid="load-demo-credentials"
+                  >
+                    Cargar credenciales de demostración
+                  </Button>
+                </section>
               </CardFooter>
             </form>
           </Card>

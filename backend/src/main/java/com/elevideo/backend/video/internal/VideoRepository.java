@@ -13,7 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-interface VideoRepository extends JpaRepository<Video, Long> {
+public interface VideoRepository extends JpaRepository<Video, Long> {
 
     @Query("""
         SELECT v FROM Video v
@@ -29,4 +29,6 @@ interface VideoRepository extends JpaRepository<Video, Long> {
     );
 
     boolean existsByIdAndProjectId(Long videoId, Long projectId);
+
+    Optional<Video> findByProjectIdAndPublicId(Long projectId, String publicId);
 }

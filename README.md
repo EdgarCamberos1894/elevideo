@@ -100,6 +100,13 @@ Elevideo está compuesto por tres servicios independientes que se comunican entr
 | ⚙️ Backend API (Swagger) | [elevideo-ec.onrender.com/swagger-ui/index.html](https://elevideo-ec.onrender.com/swagger-ui/index.html) | ✅ Desplegado |
 | 🐍 Microservicio Python | — | ⚠️ Solo local |
 
+### Acceso demo
+
+El formulario de inicio de sesion permite cargar una cuenta verificada con proyectos, videos y resultados preparados:
+
+- Correo: `demo@elevideo.app`
+- Contrasena: `Demo123!`
+
 > **¿Por qué el microservicio Python no está desplegado?**  
 > El procesamiento de video con MediaPipe, OpenCV y FFmpeg es una tarea intensiva en CPU y memoria RAM. Los planes gratuitos de plataformas como Render o Railway no ofrecen los recursos suficientes para ejecutarlo de forma estable. Para usarlo es necesario correrlo localmente o en un servidor propio con recursos adecuados.
 

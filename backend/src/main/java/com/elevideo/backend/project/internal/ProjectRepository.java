@@ -12,13 +12,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-interface ProjectRepository extends JpaRepository<Project, Long> {
+public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     Page<Project> findByUserId(UUID userId, Pageable pageable);
 
     Optional<Project> findByIdAndUserId(Long projectId, UUID userId);
 
     boolean existsByIdAndUserId(Long id, UUID userId);
+
+    Optional<Project> findByUserIdAndName(UUID userId, String name);
 
     @Query("SELECT COUNT(v) FROM Video v WHERE v.projectId = :projectId")
     long countVideosByProjectId(@Param("projectId") Long projectId);
