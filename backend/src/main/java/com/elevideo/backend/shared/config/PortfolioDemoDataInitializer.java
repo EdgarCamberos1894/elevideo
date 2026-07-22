@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,10 +49,13 @@ public class PortfolioDemoDataInitializer implements ApplicationRunner {
     private final ProcessingJobRepository processingJobRepository;
     private final VideoRenditionRepository videoRenditionRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        ensureDemoSequences();
+
         User demoUser = seedUser();
         Project launchProject = seedProject(
                 demoUser,
@@ -98,6 +102,32 @@ public class PortfolioDemoDataInitializer implements ApplicationRunner {
                 720,
                 VideoStatus.UPLOADED
         );
+    }
+
+    private void ensureDemoSequences() {
+        ensureSequence("processing_jobs_seq", "processing_jobs");
+        ensureSequence("video_rendition_seq", "video_rendition");
+    }
+
+    private void ensureSequence(String sequenceName, String tableName) {
+        jdbcTemplate.execute("""
+                DO $$
+                DECLARE
+                    start_value BIGINT;
+                BEGIN
+                    IF to_regclass('elevideo.%s') IS NULL THEN
+                        SELECT COALESCE(MAX(id), 0) + 1
+                        INTO start_value
+                        FROM elevideo.%s;
+
+                        EXECUTE format(
+                            'CREATE SEQUENCE elevideo.%s START WITH %%s INCREMENT BY 50',
+                            start_value
+                        );
+                    END IF;
+                END
+                $$;
+                """.formatted(sequenceName, tableName, sequenceName));
     }
 
     private User seedUser() {
