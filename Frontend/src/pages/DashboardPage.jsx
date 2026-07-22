@@ -210,7 +210,7 @@ export function DashboardPage() {
 
         {/* Projects Grid */}
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-6">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="overflow-hidden">
                 <div className="h-32 bg-gradient-to-br from-muted to-muted/50" />
@@ -261,7 +261,7 @@ export function DashboardPage() {
             </Card>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative">
+          <div className="relative grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-6">
             {projects.map((project, index) => (
               <Link 
                 key={project.id} 

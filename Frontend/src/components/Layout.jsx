@@ -60,7 +60,7 @@ export function Layout({ children }) {
     <div className="min-h-screen dashboard-bg">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="container flex h-16 items-center justify-between px-4 md:px-8">
+        <div className="mx-auto flex h-16 w-full max-w-[1920px] items-center justify-between px-4 sm:px-6 lg:px-8 2xl:px-12">
           {/* Logo */}
           <Link to="/dashboard" className="flex items-center gap-3 group">
             <div className="relative">
@@ -219,7 +219,7 @@ export function Layout({ children }) {
       </header>
 
       {/* Main Content */}
-      <main className="container px-4 py-8 md:px-8 md:py-12">
+      <main className="mx-auto w-full max-w-[1920px] px-4 py-8 sm:px-6 lg:px-8 lg:py-10 2xl:px-12 2xl:py-12">
         {children}
       </main>
     </div>
