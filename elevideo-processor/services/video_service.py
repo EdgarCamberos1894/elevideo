@@ -48,13 +48,18 @@ class VideoProcessingService:
     def set_progress_callback(self, callback: Callable) -> None:
         self.progress_callback = callback
 
+    def _publish_progress(self, job_id: str, data: dict) -> None:
+        if self.progress_callback:
+            self.progress_callback(job_id, data)
+        notify_progress(job_id, data)
+
     def process_video(self, request: VideoProcessRequest, job_id: str) -> Tuple[str, dict]:
         t0               = time.time()
         local_input_path = None
         local_output_path = None
         perf             = self.performance_monitor
 
-        base_tracker = ProgressTracker(job_id, update_callback=lambda jid, data: notify_progress(jid, data))
+        base_tracker = ProgressTracker(job_id, update_callback=self._publish_progress)
         base_tracker.start()
         tracker = CancellableProgressTracker(base_tracker, self.cancellation_manager, job_id)
 
