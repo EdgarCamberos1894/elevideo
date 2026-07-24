@@ -8,7 +8,7 @@
 **Plataforma inteligente de procesamiento de video**  
 Convierte videos horizontales a formato vertical 9:16 con detección de rostros, reencuadre inteligente y múltiples modos de procesamiento para TikTok, Instagram Reels y YouTube Shorts.
 
-[![Frontend](https://img.shields.io/badge/Frontend-Vercel-black?style=for-the-badge&logo=vercel)](https://elevideo.vercel.app)
+[![Frontend](https://img.shields.io/badge/Frontend-cambers.lat-black?style=for-the-badge&logo=vercel)](https://elevideo.cambers.lat)
 [![Backend](https://img.shields.io/badge/Backend%20API-Render-46E3B7?style=for-the-badge&logo=render)](https://elevideo-ec.onrender.com/swagger-ui/index.html)
 [![Java](https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.11-6DB33F?style=for-the-badge&logo=springboot)](https://spring.io/projects/spring-boot)
@@ -63,7 +63,7 @@ Elevideo está compuesto por tres servicios independientes que se comunican entr
                             ▼
 ┌─────────────────────────────────────────────────────────┐
 │              Frontend  (React + Tailwind CSS)           │
-│                   elevideo.vercel.app                   │
+│                  elevideo.cambers.lat                   │
 └───────────────────────────┬─────────────────────────────┘
                             │ REST API + JWT
                             ▼
@@ -98,7 +98,7 @@ Elevideo está compuesto por tres servicios independientes que se comunican entr
 
 | Servicio | URL | Estado |
 |---|---|---|
-| 🎨 Frontend | [elevideo.vercel.app](https://elevideo.vercel.app) | ✅ Desplegado |
+| 🎨 Frontend | [elevideo.cambers.lat](https://elevideo.cambers.lat) | ✅ Desplegado |
 | ⚙️ Backend API (Swagger) | [elevideo-ec.onrender.com/swagger-ui/index.html](https://elevideo-ec.onrender.com/swagger-ui/index.html) | ✅ Desplegado |
 | 🐍 Microservicio Python | — | ⚠️ Solo local |
 
