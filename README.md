@@ -9,7 +9,7 @@
 Convierte videos horizontales a formato vertical 9:16 con detección de rostros, reencuadre inteligente y múltiples modos de procesamiento para TikTok, Instagram Reels y YouTube Shorts.
 
 [![Frontend](https://img.shields.io/badge/Frontend-cambers.lat-black?style=for-the-badge&logo=vercel)](https://elevideo.cambers.lat)
-[![Backend](https://img.shields.io/badge/Backend%20API-Render-46E3B7?style=for-the-badge&logo=render)](https://elevideo-ec.onrender.com/swagger-ui/index.html)
+[![Backend](https://img.shields.io/badge/Backend%20API-cambers.lat-46E3B7?style=for-the-badge&logo=springboot)](https://api.elevideo.cambers.lat/swagger-ui/index.html)
 [![Java](https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.11-6DB33F?style=for-the-badge&logo=springboot)](https://spring.io/projects/spring-boot)
 [![React](https://img.shields.io/badge/React-JS-61DAFB?style=for-the-badge&logo=react)](https://react.dev/)
@@ -69,7 +69,7 @@ Elevideo está compuesto por tres servicios independientes que se comunican entr
                             ▼
 ┌─────────────────────────────────────────────────────────┐
 │           Backend Spring Boot  (Monolito Modular)       │
-│             elevideo-ec.onrender.com                    │
+│                api.elevideo.cambers.lat                 │
 │                                                         │
 │   auth │ user │ project │ video │ processing │ notif.   │
 └──────────────┬───────────────────────┬──────────────────┘
@@ -99,7 +99,7 @@ Elevideo está compuesto por tres servicios independientes que se comunican entr
 | Servicio | URL | Estado |
 |---|---|---|
 | 🎨 Frontend | [elevideo.cambers.lat](https://elevideo.cambers.lat) | ✅ Desplegado |
-| ⚙️ Backend API (Swagger) | [elevideo-ec.onrender.com/swagger-ui/index.html](https://elevideo-ec.onrender.com/swagger-ui/index.html) | ✅ Desplegado |
+| ⚙️ Backend API (Swagger) | [api.elevideo.cambers.lat/swagger-ui/index.html](https://api.elevideo.cambers.lat/swagger-ui/index.html) | ✅ Desplegado |
 | 🐍 Microservicio Python | — | ⚠️ Solo local |
 
 > **¿Por qué el microservicio Python no está desplegado?**  
