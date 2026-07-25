@@ -233,7 +233,7 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 # =========================
 # CORS
 # =========================
-CORS_ALLOWED=http://localhost:*
+CORS_ALLOWED=http://localhost:*,https://elevideo.cambers.lat
 
 # ============================================================
 # Configuración del microservicio Python de procesamiento de video
@@ -270,13 +270,19 @@ createdb elevideo
 mvn spring-boot:run
 ```
 
-La aplicación arranca en `http://localhost:8081` o el puerto especificado por el usuario. 
+La aplicación arranca en `http://localhost:8081` o el puerto especificado por el usuario.
 
 ---
 
 ## Documentación API
 
-Con la aplicación en ejecución, la documentación interactiva de Swagger UI está disponible en:
+En producción, Swagger UI está disponible en:
+
+```
+https://api.elevideo.cambers.lat/swagger-ui/index.html
+```
+
+Con la aplicación en ejecución local, la documentación interactiva está disponible en:
 
 ```
 http://localhost:8081/swagger-ui/index.html
