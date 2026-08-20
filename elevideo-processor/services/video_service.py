@@ -19,7 +19,7 @@ from models.schemas import (
 from processing.face_detector_enhanced import EnhancedFaceDetector
 from processing.stabilization_enhanced import AdaptiveStabilizer
 from services.strategies import get_strategy
-from services.webhook_service import notify_progress
+from services.webhook_service import flush_progress, notify_progress
 from storage.cloudinary_service import CloudinaryService
 from utils.cancellation_manager import (
     get_cancellation_manager,
@@ -50,7 +50,11 @@ class VideoProcessingService:
     def _publish_progress(self, job_id: str, data: dict) -> None:
         if self.progress_callback:
             self.progress_callback(job_id, data)
-        notify_progress(job_id, data)
+
+        # Los estados terminales viajan por el webhook final con payload completo.
+        # El progreso remoto solo cubre estados intermedios.
+        if data.get("phase") not in ("completed", "failed"):
+            notify_progress(job_id, data)
 
     def process_video(self, request: VideoProcessRequest, job_id: str) -> Tuple[str, dict]:
         t0                = time.time()
@@ -167,6 +171,9 @@ class VideoProcessingService:
             perf.log_summary(job_id=job_id)
             tracker.complete(success=True)
 
+            # Garantiza que ningún progreso asíncrono quede detrás del webhook final.
+            flush_progress(job_id)
+
             logger.info(
                 "Job completado | job_id=%s | mode=%s | tiempo=%.2fs | calidad=%.1f%% | url=%s",
                 job_id,
@@ -185,6 +192,7 @@ class VideoProcessingService:
             except Exception:
                 pass
             base_tracker.complete(success=False)
+            flush_progress(job_id)
             self.cancellation_manager.remove_cancellation(job_id)
             raise
 
@@ -196,6 +204,7 @@ class VideoProcessingService:
             except Exception:
                 pass
             tracker.complete(success=False)
+            flush_progress(job_id)
             raise VideoProcessingError(error_info["user_message"]) from e
 
     def _get_duration(self, path: str) -> Optional[float]:
