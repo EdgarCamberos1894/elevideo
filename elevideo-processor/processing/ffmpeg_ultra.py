@@ -2,19 +2,32 @@ import json
 import logging
 import os
 import subprocess
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
-def crop_video_ultra(input_path: str, output_path: str, positions: list, config, encoder="libx264") -> bool:
+def crop_video_ultra(
+    input_path: str,
+    output_path: str,
+    positions: list,
+    config,
+    encoder="libx264",
+    source_crop_size: Optional[Tuple[int, int]] = None,
+) -> bool:
     mode        = config.CONVERSION_MODE["mode"]
     mode_config = config.CONVERSION_MODE["modes"][mode]
     logger.info("Modo de conversión: %s | encoder: %s", mode.upper(), encoder)
 
     if mode == "full":
         return _process_full(input_path, output_path, config, mode_config, encoder)
-    return _process_smart_crop(input_path, output_path, positions, config, encoder)
+    return _process_smart_crop(input_path, output_path, positions, config, encoder, source_crop_size)
+
+
+def _append_unsharp(vf: str, config) -> str:
+    if config.ENCODING_SETTINGS.get("apply_unsharp", False):
+        return f"{vf},unsharp={config.ENCODING_SETTINGS['unsharp_params']}"
+    return vf
 
 
 def _process_full(input_path, output_path, config, mode_config, encoder) -> bool:
@@ -32,11 +45,13 @@ def _process_full(input_path, output_path, config, mode_config, encoder) -> bool
               f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color={bg}")
         logger.info("Usando letterbox | fondo=%s", bg)
 
-    return _encode(input_path, output_path, vf, config, encoder)
+    return _encode(input_path, output_path, _append_unsharp(vf, config), config, encoder)
 
 
-def _process_smart_crop(input_path, output_path, positions, config, encoder) -> bool:
-    cw, ch = config.CROP_SETTINGS["width"], config.CROP_SETTINGS["height"]
+def _process_smart_crop(input_path, output_path, positions, config, encoder, source_crop_size) -> bool:
+    output_w = config.CROP_SETTINGS["width"]
+    output_h = config.CROP_SETTINGS["height"]
+    crop_w, crop_h = source_crop_size or (output_w, output_h)
 
     if config.KEYFRAME_SETTINGS.get("optimize_keyframes", False) and positions:
         min_move = config.KEYFRAME_SETTINGS.get("min_movement_threshold", 5)
@@ -48,13 +63,13 @@ def _process_smart_crop(input_path, output_path, positions, config, encoder) -> 
         positions = optimized
 
     if not positions:
-        crop_vf = f"crop={cw}:{ch}:(iw-{cw})/2:0"
+        crop_vf = f"crop={crop_w}:{crop_h}:(iw-{crop_w})/2:(ih-{crop_h})/2"
     else:
         positions = sorted(positions, key=lambda p: p[0])
-        expr      = _build_lerp(positions, config.STABILIZATION.get("use_easing", False))
-        crop_vf   = f"crop={cw}:{ch}:x='{expr}':y=0"
+        expr = _build_lerp(positions, config.STABILIZATION.get("use_easing", False))
+        crop_vf = f"crop={crop_w}:{crop_h}:x='{expr}':y=(ih-{crop_h})/2"
 
-    filters = [crop_vf]
+    filters = [crop_vf, f"scale={output_w}:{output_h}:flags=lanczos"]
     if config.ENCODING_SETTINGS.get("apply_unsharp", False):
         filters.append(f"unsharp={config.ENCODING_SETTINGS['unsharp_params']}")
 
@@ -97,13 +112,14 @@ def _build_lerp(positions: List[Tuple[float, float]], use_easing: bool) -> str:
     # Si hay más keyframes, submuestreamos para quedarnos en ese límite.
     _MAX_KEYFRAMES = 28
     if len(positions) > _MAX_KEYFRAMES:
-        step      = (len(positions) - 1) / (_MAX_KEYFRAMES - 1)
-        indices   = [int(round(i * step)) for i in range(_MAX_KEYFRAMES)]
-        indices[-1] = len(positions) - 1  # asegurar que incluye el último
-        positions = [positions[i] for i in indices]
+        step        = (len(positions) - 1) / (_MAX_KEYFRAMES - 1)
+        indices     = [int(round(i * step)) for i in range(_MAX_KEYFRAMES)]
+        indices[-1] = len(positions) - 1
+        positions   = [positions[i] for i in indices]
         logger.info("Keyframes reducidos a %d para expresión FFmpeg", len(positions))
 
     expr = ""
+    open_groups = 0
     for i in range(len(positions) - 1):
         t1, x1 = positions[i]
         t2, x2 = positions[i + 1]
@@ -112,8 +128,9 @@ def _build_lerp(positions: List[Tuple[float, float]], use_easing: bool) -> str:
             continue
         interp = f"{int(x1)}+({int(x2)}-{int(x1)})*(t-{t1:.3f})/{dur:.3f}"
         expr += f"if(between(t,{t1:.3f},{t2:.3f}),{interp},"
+        open_groups += 1
 
-    return expr + str(int(positions[-1][1])) + ")" * (len(positions) - 1)
+    return expr + str(int(positions[-1][1])) + ")" * open_groups
 
 
 def _log_video_info(path: str):
