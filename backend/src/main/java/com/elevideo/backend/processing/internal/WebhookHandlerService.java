@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Servicio interno que procesa los webhooks recibidos desde el microservicio Python.
- * Visibilidad de paquete — solo WebhookController lo inyecta.
+ * Visibilidad de paquete: solo WebhookController lo inyecta.
  */
 @Slf4j
 @Service
@@ -56,6 +56,14 @@ public class WebhookHandlerService {
         ProcessingJob job = jobRepository.findByJobId(request.getJobId())
                 .orElseThrow(() -> new IllegalArgumentException("Job no encontrado: " + request.getJobId()));
 
+        if (isTerminal(job.getStatus())) {
+            log.debug(
+                    "Ignorando progreso tardío para job terminal | jobId={} | status={} | phase={} | progress={}",
+                    job.getJobId(), job.getStatus(), request.getPhase(), request.getProgress()
+            );
+            return;
+        }
+
         job.setProgressPercent(request.getProgress());
         job.setPhase(request.getPhase());
         job.setEtaSeconds(request.getEtaSeconds());
@@ -65,9 +73,11 @@ public class WebhookHandlerService {
         jobRepository.save(job);
     }
 
-    // ----------------------------------------------------------------
-    // Helpers privados
-    // ----------------------------------------------------------------
+    private boolean isTerminal(JobStatus status) {
+        return status == JobStatus.COMPLETED
+                || status == JobStatus.FAILED
+                || status == JobStatus.CANCELLED;
+    }
 
     private VideoRendition createRendition(ProcessingJob job, ProcessingJobWebhookRequest request) {
         VideoRendition rendition = renditionMapper.toVideoRendition(request);
