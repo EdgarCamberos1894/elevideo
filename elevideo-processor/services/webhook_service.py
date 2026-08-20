@@ -1,8 +1,9 @@
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
+from threading import Lock
 from typing import Any, Dict
 
 import requests
@@ -21,6 +22,8 @@ _RETRY_DELAY       = 1.0
 _TIMEOUT           = 10
 _PROGRESS_TIMEOUT  = 3
 _PROGRESS_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="progress-webhook")
+_PROGRESS_FUTURES: Dict[str, set[Future]] = {}
+_PROGRESS_LOCK = Lock()
 
 if not _WEBHOOK_URL:
     logger.warning("SPRING_BOOT_WEBHOOK_URL no configurada - notificaciones finales DESACTIVADAS")
@@ -114,11 +117,32 @@ def notify_progress(job_id: str, progress_data: Dict[str, Any]) -> bool:
     }
 
     try:
-        _PROGRESS_EXECUTOR.submit(_send_progress_once, job_id, payload)
+        future = _PROGRESS_EXECUTOR.submit(_send_progress_once, job_id, payload)
+        with _PROGRESS_LOCK:
+            _PROGRESS_FUTURES.setdefault(job_id, set()).add(future)
+        future.add_done_callback(lambda completed, jid=job_id: _forget_progress_future(jid, completed))
         return True
     except RuntimeError as e:
         logger.warning("No se pudo encolar webhook de progreso | job_id=%s | %s", job_id, e)
         return False
+
+
+def flush_progress(job_id: str) -> None:
+    """Espera solo los webhooks ya encolados para asegurar orden antes del webhook terminal."""
+    with _PROGRESS_LOCK:
+        pending = list(_PROGRESS_FUTURES.get(job_id, set()))
+    if pending:
+        wait(pending)
+
+
+def _forget_progress_future(job_id: str, future: Future) -> None:
+    with _PROGRESS_LOCK:
+        futures = _PROGRESS_FUTURES.get(job_id)
+        if not futures:
+            return
+        futures.discard(future)
+        if not futures:
+            _PROGRESS_FUTURES.pop(job_id, None)
 
 
 def _send_progress_once(job_id: str, payload: dict) -> None:
