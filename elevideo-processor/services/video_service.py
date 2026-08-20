@@ -27,7 +27,7 @@ from utils.cancellation_manager import (
     CancellableProgressTracker,
     CancellableOperation,
 )
-from utils.optimization import get_performance_monitor, HardwareAccelerationDetector
+from utils.optimization import HardwareAccelerationDetector, PerformanceMonitor
 from utils.preview_generator import create_preview_generator
 from utils.progress_tracker import ProgressTracker, ProcessingPhase
 
@@ -41,7 +41,6 @@ class VideoProcessingService:
         self.progress_callback: Optional[Callable] = None
         self.cancellation_manager = get_cancellation_manager()
         self.preview_generator    = create_preview_generator(temp_dir=cloudinary_service.temp_dir)
-        self.performance_monitor  = get_performance_monitor()
         self.hw_encoder           = HardwareAccelerationDetector.get_optimized_ffmpeg_encoder()
         logger.info("VideoProcessingService inicializado | encoder=%s", self.hw_encoder)
 
@@ -57,13 +56,18 @@ class VideoProcessingService:
         t0                = time.time()
         local_input_path  = None
         local_output_path = None
-        perf              = self.performance_monitor
+        cleanup_done      = False
+        perf              = PerformanceMonitor()
 
         base_tracker = ProgressTracker(job_id, update_callback=self._publish_progress)
         base_tracker.start()
         tracker = CancellableProgressTracker(base_tracker, self.cancellation_manager, job_id)
 
         def _cleanup():
+            nonlocal cleanup_done
+            if cleanup_done:
+                return
+            cleanup_done = True
             try:
                 tracker.update_phase(ProcessingPhase.CLEANING_UP)
                 self.cloudinary.delete_local_files(job_id)
@@ -73,8 +77,13 @@ class VideoProcessingService:
                 logger.warning("Error en cleanup | job_id=%s | %s", job_id, e)
 
         try:
-            logger.info("Iniciando job | job_id=%s | mode=%s | platform=%s | quality=%s",
-                        job_id, request.processing_mode.value, request.platform.value, request.quality.value)
+            logger.info(
+                "Iniciando job | job_id=%s | mode=%s | platform=%s | quality=%s",
+                job_id,
+                request.processing_mode.value,
+                request.platform.value,
+                request.quality.value,
+            )
 
             tracker.update_phase(ProcessingPhase.VALIDATING)
 
@@ -90,7 +99,7 @@ class VideoProcessingService:
                 runtime_config = self._configure(request)
 
             tracker.update_phase(ProcessingPhase.ANALYZING)
-            t_proc = time.time()
+            pipeline_started = time.time()
             with ErrorContext("procesamiento de video", cleanup=_cleanup, job_id=job_id):
                 strategy   = get_strategy(request.processing_mode)
                 detector   = EnhancedFaceDetector(runtime_config)
@@ -109,10 +118,12 @@ class VideoProcessingService:
 
                 if "frames_processed" in metrics:
                     base_tracker.metadata["frames_processed"] = metrics["frames_processed"]
-                    base_tracker.metadata["total_frames"]     = metrics.get("total_frames")
+                    base_tracker.metadata["total_frames"] = metrics.get("total_frames")
                     perf.record_metric("frames_analyzed", metrics["frames_processed"])
 
-            perf.record_metric("analysis_time", time.time() - t_proc)
+            perf.record_metric("pipeline_time", time.time() - pipeline_started)
+            perf.record_metric("analysis_time", metrics.get("analysis_time", 0.0))
+            perf.record_metric("encoding_time", metrics.get("encoding_time", 0.0))
             tracker.update_phase(ProcessingPhase.ENCODING_COMPLETE)
 
             if self.cancellation_manager.is_cancelled(job_id):
@@ -129,9 +140,14 @@ class VideoProcessingService:
             perf.record_metric("upload_time", time.time() - t_up)
             tracker.update_phase(ProcessingPhase.UPLOAD_COMPLETE)
 
+            preview_started = time.time()
             thumbnail_url, preview_url = self._generate_previews(
-                local_output_path, job_id, request.platform.value, request.processing_mode,
+                local_output_path,
+                job_id,
+                request.platform.value,
+                request.processing_mode,
             )
+            perf.record_metric("preview_time", time.time() - preview_started)
 
             output_duration = self._get_duration(local_output_path)
 
@@ -146,41 +162,53 @@ class VideoProcessingService:
                 "output_duration_seconds": output_duration,
             })
 
-            if self.hw_encoder != "libx264":
-                perf.record_metric("hw_acceleration_used", True)
+            perf.record_metric("hw_acceleration_used", self.hw_encoder != "libx264")
             perf.record_metric("total_processing_time", total_time)
-            perf.log_summary()
+            perf.log_summary(job_id=job_id)
             tracker.complete(success=True)
 
-            logger.info("Job completado | job_id=%s | mode=%s | tiempo=%.2fs | calidad=%.1f%% | url=%s",
-                        job_id, request.processing_mode.value, total_time,
-                        metrics.get("overall_quality", 0) * 100, output_url)
+            logger.info(
+                "Job completado | job_id=%s | mode=%s | tiempo=%.2fs | calidad=%.1f%% | url=%s",
+                job_id,
+                request.processing_mode.value,
+                total_time,
+                metrics.get("overall_quality", 0) * 100,
+                output_url,
+            )
 
             return output_url, metrics
 
         except JobCancelledException:
             logger.warning("Job cancelado | job_id=%s", job_id)
+            try:
+                _cleanup()
+            except Exception:
+                pass
             base_tracker.complete(success=False)
-            try: _cleanup()
-            except Exception: pass
             self.cancellation_manager.remove_cancellation(job_id)
             raise
 
         except Exception as e:
             logger.exception("Error en procesamiento | job_id=%s", job_id)
-            tracker.complete(success=False)
             error_info = ErrorHandler.handle(e, job_id=job_id, operation="process_video")
-            try: _cleanup()
-            except Exception: pass
+            try:
+                _cleanup()
+            except Exception:
+                pass
+            tracker.complete(success=False)
             raise VideoProcessingError(error_info["user_message"]) from e
 
     def _get_duration(self, path: str) -> Optional[float]:
         """Lee la duración del video de salida con ffprobe. Retorna None si falla."""
-        import subprocess, json
+        import json
+        import subprocess
+
         try:
             result = subprocess.run(
                 ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", path],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             return float(json.loads(result.stdout)["format"]["duration"])
         except Exception as e:
@@ -195,11 +223,27 @@ class VideoProcessingService:
         processing_mode: ProcessingMode,
     ) -> Tuple[Optional[str], Optional[str]]:
         try:
-            thumbnail_path = self.preview_generator.generate_thumbnail(local_output_path, timestamp_seconds=1.0, width=480)
-            thumbnail_url  = self.cloudinary.upload_image(thumbnail_path, f"{job_id}_thumb", folder=f"processed_{platform}/thumbnails")
+            thumbnail_path = self.preview_generator.generate_thumbnail(
+                local_output_path,
+                timestamp_seconds=1.0,
+                width=480,
+            )
+            thumbnail_url = self.cloudinary.upload_image(
+                thumbnail_path,
+                f"{job_id}_thumb",
+                folder=f"processed_{platform}/thumbnails",
+            )
 
-            preview_path = self.preview_generator.generate_preview_clip(local_output_path, duration_seconds=5, start_time=0.0)
-            preview_url  = self.cloudinary.upload_video(preview_path, f"{job_id}_preview", folder=f"processed_{platform}/previews")
+            preview_path = self.preview_generator.generate_preview_clip(
+                local_output_path,
+                duration_seconds=5,
+                start_time=0.0,
+            )
+            preview_url = self.cloudinary.upload_video(
+                preview_path,
+                f"{job_id}_preview",
+                folder=f"processed_{platform}/previews",
+            )
 
             self.preview_generator.cleanup(thumbnail_path, preview_path)
             return thumbnail_url, preview_url
@@ -218,7 +262,6 @@ class VideoProcessingService:
     def _configure(self, request: VideoProcessRequest):
         runtime_config = config.create_runtime_config()
 
-        # Aplicar preset de plataforma primero, luego sobrescribir con la calidad del usuario.
         platform_preset = {
             Platform.tiktok:         "tiktok",
             Platform.instagram:      "instagram",
@@ -232,9 +275,9 @@ class VideoProcessingService:
             QualityLevel.high:   {"sample_rate": 3, "use_multipass": True,  "quality_preset": "high"},
         }
         overrides = quality_overrides[request.quality]
-        runtime_config.PERFORMANCE_SETTINGS["sample_rate"]   = overrides["sample_rate"]
+        runtime_config.PERFORMANCE_SETTINGS["sample_rate"] = overrides["sample_rate"]
         runtime_config.PERFORMANCE_SETTINGS["use_multipass"] = overrides["use_multipass"]
-        runtime_config.ENCODING_SETTINGS["quality_preset"]   = overrides["quality_preset"]
+        runtime_config.ENCODING_SETTINGS["quality_preset"] = overrides["quality_preset"]
 
         conversion_mode = BACKGROUND_TO_CONVERSION_MODE[request.background_mode]
         runtime_config.CONVERSION_MODE["mode"] = conversion_mode
@@ -244,11 +287,9 @@ class VideoProcessingService:
         if request.advanced_options:
             adv = request.advanced_options
 
-            # Nitidez aplica tanto a smart crop como a fondos completos.
             if adv.apply_sharpening is not None:
                 runtime_config.ENCODING_SETTINGS["apply_unsharp"] = adv.apply_sharpening
 
-            # Estas opciones solo tienen significado cuando existe seguimiento de rostro.
             if conversion_mode == "smart_crop":
                 if adv.max_camera_speed is not None:
                     runtime_config.STABILIZATION["max_velocity_px_per_frame"] = adv.max_camera_speed
