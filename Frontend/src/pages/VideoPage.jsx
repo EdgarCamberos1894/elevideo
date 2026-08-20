@@ -89,6 +89,8 @@ const jobStatusConfig = {
 
 const ACTIVE_JOB_STATUSES = new Set(['pending', 'processing']);
 const isActiveJob = (job) => ACTIVE_JOB_STATUSES.has(job.status?.toLowerCase());
+const SHORT_MIN_DURATION_SECONDS = 5;
+const SHORT_MAX_DURATION_SECONDS = 60;
 
 const processingModeLabels = {
   vertical: 'Video completo',
@@ -121,8 +123,8 @@ function timeAgo(dateStr) {
 }
 
 function formatDuration(seconds) {
-  if (!seconds) return '--:--';
-  const totalSeconds = Math.floor(seconds);
+  if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) return '--:--';
+  const totalSeconds = Math.max(0, Math.floor(Number(seconds)));
   const minutes = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
   return `${minutes}:${secs.toString().padStart(2, '0')}`;
@@ -179,6 +181,62 @@ export function VideoPage() {
     queryKey: ['renditions', projectId, videoId],
     queryFn: () => processingApi.getRenditions(projectId, videoId, { page: 0, size: 20 }),
   });
+
+  const videoDurationSeconds = Math.max(
+    0,
+    Math.floor(Number(videoData?.data?.durationInSeconds ?? videoData?.durationInSeconds ?? 0))
+  );
+  const hasVideoDuration = videoDurationSeconds > 0;
+  const shortModesDisabled = hasVideoDuration && videoDurationSeconds < SHORT_MIN_DURATION_SECONDS;
+  const shortAutoMaxDuration = hasVideoDuration
+    ? Math.min(SHORT_MAX_DURATION_SECONDS, Math.max(SHORT_MIN_DURATION_SECONDS, videoDurationSeconds))
+    : SHORT_MAX_DURATION_SECONDS;
+  const maxManualStartTime = hasVideoDuration
+    ? Math.max(0, videoDurationSeconds - SHORT_MIN_DURATION_SECONDS)
+    : 0;
+  const manualRemainingDuration = hasVideoDuration
+    ? Math.max(0, videoDurationSeconds - shortStartTime)
+    : SHORT_MAX_DURATION_SECONDS;
+  const shortManualMaxDuration = Math.max(
+    SHORT_MIN_DURATION_SECONDS,
+    Math.min(SHORT_MAX_DURATION_SECONDS, Math.floor(manualRemainingDuration))
+  );
+
+  const handleShortStartTimeChange = (rawValue) => {
+    const parsedValue = Number(rawValue);
+    if (!Number.isFinite(parsedValue)) {
+      setShortStartTime(0);
+      return;
+    }
+
+    const upperBound = hasVideoDuration ? maxManualStartTime : Math.max(0, parsedValue);
+    setShortStartTime(Math.min(Math.max(parsedValue, 0), upperBound));
+  };
+
+  useEffect(() => {
+    if (!hasVideoDuration) return;
+
+    if (shortModesDisabled) {
+      setProcessingMode((currentMode) => currentMode === 'vertical' ? currentMode : 'vertical');
+      setShortAutoDuration(SHORT_MIN_DURATION_SECONDS);
+      setShortStartTime(0);
+      setShortDuration(SHORT_MIN_DURATION_SECONDS);
+      return;
+    }
+
+    setShortAutoDuration((currentDuration) => (
+      Math.min(Math.max(currentDuration, SHORT_MIN_DURATION_SECONDS), shortAutoMaxDuration)
+    ));
+    setShortStartTime((currentStart) => Math.min(Math.max(currentStart, 0), maxManualStartTime));
+  }, [hasVideoDuration, maxManualStartTime, shortAutoMaxDuration, shortModesDisabled]);
+
+  useEffect(() => {
+    if (!hasVideoDuration || shortModesDisabled) return;
+
+    setShortDuration((currentDuration) => (
+      Math.min(Math.max(currentDuration, SHORT_MIN_DURATION_SECONDS), shortManualMaxDuration)
+    ));
+  }, [hasVideoDuration, shortManualMaxDuration, shortModesDisabled]);
 
   // Check for completed jobs and notify when browser permission was explicitly granted.
   useEffect(() => {
@@ -248,6 +306,27 @@ export function VideoPage() {
   });
 
   const handleProcess = () => {
+    const isShortMode = processingMode === 'short_auto' || processingMode === 'short_manual';
+
+    if (isShortMode && shortModesDisabled) {
+      toast.error(`El video debe durar al menos ${SHORT_MIN_DURATION_SECONDS} segundos para crear un short.`);
+      return;
+    }
+
+    if (hasVideoDuration && processingMode === 'short_auto' && shortAutoDuration > videoDurationSeconds) {
+      toast.error('La duración del short no puede superar la duración del video.');
+      return;
+    }
+
+    if (
+      hasVideoDuration
+      && processingMode === 'short_manual'
+      && shortStartTime + shortDuration > videoDurationSeconds
+    ) {
+      toast.error('El corte manual no puede terminar después del final del video.');
+      return;
+    }
+
     const data = {
       processingMode,
       platform,
@@ -621,26 +700,40 @@ export function VideoPage() {
                       { value: 'vertical', label: 'Video completo', desc: 'Convierte todo el video', icon: '📹' },
                       { value: 'short_auto', label: 'Short automático', desc: 'IA selecciona lo mejor', icon: '✨' },
                       { value: 'short_manual', label: 'Short manual', desc: 'Tú eliges el momento', icon: '✂️' },
-                    ].map((mode) => (
-                      <button
-                        key={mode.value}
-                        type="button"
-                        onClick={() => setProcessingMode(mode.value)}
-                        className={`w-full p-3 rounded-xl text-left transition-all flex items-center gap-3 ${
-                          processingMode === mode.value
-                            ? 'bg-indigo-500/10 border-2 border-indigo-500/50 dark:bg-indigo-500/20'
-                            : 'bg-muted/50 border-2 border-transparent hover:bg-muted hover:border-border'
-                        }`}
-                      >
-                        <span className="text-xl">{mode.icon}</span>
-                        <div>
-                          <p className={`font-medium text-sm ${processingMode === mode.value ? 'text-indigo-600 dark:text-indigo-400' : ''}`}>
-                            {mode.label}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{mode.desc}</p>
-                        </div>
-                      </button>
-                    ))}
+                    ].map((mode) => {
+                      const isUnavailableShortMode = mode.value !== 'vertical' && shortModesDisabled;
+
+                      return (
+                        <button
+                          key={mode.value}
+                          type="button"
+                          disabled={isUnavailableShortMode}
+                          aria-disabled={isUnavailableShortMode}
+                          onClick={() => {
+                            if (!isUnavailableShortMode) setProcessingMode(mode.value);
+                          }}
+                          className={`w-full p-3 rounded-xl text-left transition-all flex items-center gap-3 ${
+                            isUnavailableShortMode
+                              ? 'bg-muted/30 border-2 border-transparent opacity-50 cursor-not-allowed'
+                              : processingMode === mode.value
+                                ? 'bg-indigo-500/10 border-2 border-indigo-500/50 dark:bg-indigo-500/20'
+                                : 'bg-muted/50 border-2 border-transparent hover:bg-muted hover:border-border'
+                          }`}
+                        >
+                          <span className="text-xl">{mode.icon}</span>
+                          <div>
+                            <p className={`font-medium text-sm ${processingMode === mode.value && !isUnavailableShortMode ? 'text-indigo-600 dark:text-indigo-400' : ''}`}>
+                              {mode.label}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {isUnavailableShortMode
+                                ? `Requiere un video de al menos ${SHORT_MIN_DURATION_SECONDS}s`
+                                : mode.desc}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -716,16 +809,21 @@ export function VideoPage() {
                     <Slider
                       value={[shortAutoDuration]}
                       onValueChange={([v]) => setShortAutoDuration(v)}
-                      min={5}
-                      max={60}
-                      step={5}
+                      min={SHORT_MIN_DURATION_SECONDS}
+                      max={shortAutoMaxDuration}
+                      step={1}
                       className="py-1"
                       data-testid="short-duration-slider"
                     />
                     <div className="flex justify-between text-[10px] text-muted-foreground">
-                      <span>5s</span>
-                      <span>60s</span>
+                      <span>{SHORT_MIN_DURATION_SECONDS}s</span>
+                      <span>{shortAutoMaxDuration}s</span>
                     </div>
+                    {hasVideoDuration && videoDurationSeconds < SHORT_MAX_DURATION_SECONDS && (
+                      <p className="text-[10px] text-center text-muted-foreground">
+                        Máximo ajustado a la duración del video: {formatDuration(videoDurationSeconds)}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -742,27 +840,41 @@ export function VideoPage() {
                         <Input
                           type="number"
                           value={shortStartTime}
-                          onChange={(e) => setShortStartTime(Number(e.target.value))}
+                          onChange={(e) => handleShortStartTimeChange(e.target.value)}
                           min={0}
+                          max={maxManualStartTime}
+                          step={1}
                           className="h-9 text-center"
                           data-testid="short-start-time-input"
                         />
+                        {hasVideoDuration && (
+                          <p className="text-[10px] text-center text-muted-foreground">
+                            Máx. inicio: {formatDuration(maxManualStartTime)}
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Duración</Label>
                         <div className="h-9 px-3 rounded-md bg-muted flex items-center justify-center">
                           <span className="font-medium text-sm">{shortDuration}s</span>
                         </div>
+                        <p className="text-[10px] text-center text-muted-foreground">
+                          Máx. disponible: {shortManualMaxDuration}s
+                        </p>
                       </div>
                     </div>
                     <Slider
                       value={[shortDuration]}
                       onValueChange={([v]) => setShortDuration(v)}
-                      min={5}
-                      max={60}
-                      step={5}
+                      min={SHORT_MIN_DURATION_SECONDS}
+                      max={shortManualMaxDuration}
+                      step={1}
                       data-testid="short-manual-duration-slider"
                     />
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>Mín. {SHORT_MIN_DURATION_SECONDS}s</span>
+                      <span>Máx. {shortManualMaxDuration}s</span>
+                    </div>
                     <div className="text-center text-xs text-muted-foreground">
                       Resultado: {formatDuration(shortStartTime)} → {formatDuration(shortStartTime + shortDuration)}
                     </div>
@@ -825,7 +937,7 @@ export function VideoPage() {
                 <Button
                   className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all text-base font-semibold rounded-xl"
                   onClick={handleProcess}
-                  disabled={processMutation.isPending}
+                  disabled={processMutation.isPending || ((processingMode === 'short_auto' || processingMode === 'short_manual') && shortModesDisabled)}
                   data-testid="process-video-button"
                 >
                   {processMutation.isPending ? (
