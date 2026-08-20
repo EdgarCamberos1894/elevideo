@@ -10,11 +10,13 @@ import com.elevideo.backend.processing.internal.mapper.VideoRenditionMapper;
 import com.elevideo.backend.processing.internal.model.JobLifecycleGroup;
 import com.elevideo.backend.processing.internal.model.JobStatus;
 import com.elevideo.backend.processing.internal.model.ProcessingJob;
+import com.elevideo.backend.processing.internal.model.ProcessingMode;
 import com.elevideo.backend.processing.internal.model.VideoRendition;
 import com.elevideo.backend.processing.internal.repository.ProcessingJobRepository;
 import com.elevideo.backend.processing.internal.repository.VideoRenditionRepository;
 import com.elevideo.backend.processing.internal.spec.ProcessingJobSpecification;
 import com.elevideo.backend.processing.internal.spec.VideoRenditionSpecification;
+import com.elevideo.backend.shared.exception.base.ConflictException;
 import com.elevideo.backend.shared.exception.base.NotFoundException;
 import com.elevideo.backend.shared.security.CurrentUserProvider;
 import com.elevideo.backend.video.api.VideoService;
@@ -34,6 +36,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 class ProcessingServiceImpl implements ProcessingService {
 
+    private static final int MIN_SHORT_DURATION_SECONDS = 5;
+
     private final ProcessingJobRepository  jobRepository;
     private final VideoRenditionRepository renditionRepository;
     private final ProcessingJobMapper      jobMapper;
@@ -50,6 +54,7 @@ class ProcessingServiceImpl implements ProcessingService {
 
         UUID userId = currentUserProvider.getCurrentUserId();
         VideoResponse video = videoService.getVideoById(videoId);
+        validateClipRange(request, video);
         VideoPythonRequest pythonRequest = processingMapper.toVideoPythonRequest(request, video.videoUrl());
 
         VideoJobCreatedResponse pythonResponse = pythonClient.post(
@@ -207,6 +212,52 @@ class ProcessingServiceImpl implements ProcessingService {
         videoService.assertVideoOwnedByUser(videoId, userId);
     }
 
+    private void validateClipRange(VideoProcessRequest request, VideoResponse video) {
+        if (request.processingMode() == null || request.processingMode() == ProcessingMode.VERTICAL) {
+            return;
+        }
+
+        Long durationInSeconds = video.durationInSeconds();
+        if (durationInSeconds == null || durationInSeconds <= 0) {
+            throw new InvalidClipRangeException("No se pudo determinar la duración del video para crear el short.");
+        }
+
+        if (durationInSeconds < MIN_SHORT_DURATION_SECONDS) {
+            throw new InvalidClipRangeException(
+                    "El video debe durar al menos " + MIN_SHORT_DURATION_SECONDS + " segundos para crear un short."
+            );
+        }
+
+        double videoDuration = durationInSeconds.doubleValue();
+
+        if (request.processingMode() == ProcessingMode.SHORT_AUTO) {
+            Integer requestedDuration = request.shortAutoDuration();
+            if (requestedDuration == null) {
+                throw new InvalidClipRangeException("Debes indicar la duración del short automático.");
+            }
+            if (requestedDuration > videoDuration) {
+                throw new InvalidClipRangeException(
+                        "La duración del short no puede superar los " + durationInSeconds + " segundos del video."
+                );
+            }
+            return;
+        }
+
+        if (request.processingMode() == ProcessingMode.SHORT_MANUAL) {
+            VideoProcessRequest.ShortManualOptions options = request.shortOptions();
+            if (options == null) {
+                throw new InvalidClipRangeException("Debes indicar el inicio y la duración del short manual.");
+            }
+
+            double clipEnd = options.startTime() + options.duration();
+            if (clipEnd > videoDuration + 0.001d) {
+                throw new InvalidClipRangeException(
+                        "El corte manual termina después del final del video. Ajusta el inicio o la duración."
+                );
+            }
+        }
+    }
+
     private ProcessingJob findJob(String jobId, Long videoId) {
         return jobRepository.findByJobIdAndVideoId(jobId, videoId)
                 .orElseThrow(() -> new JobNotFoundException(jobId));
@@ -222,5 +273,9 @@ class ProcessingServiceImpl implements ProcessingService {
 
     static class RenditionNotFoundException extends NotFoundException {
         RenditionNotFoundException(Long id) { super("Rendition not found with id: " + id); }
+    }
+
+    static class InvalidClipRangeException extends ConflictException {
+        InvalidClipRangeException(String message) { super(message); }
     }
 }
