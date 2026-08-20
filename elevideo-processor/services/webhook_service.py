@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -15,17 +16,18 @@ _WEBHOOK_URL          = os.getenv("SPRING_BOOT_WEBHOOK_URL", "")
 _PROGRESS_WEBHOOK_URL = os.getenv("SPRING_BOOT_PROGRESS_WEBHOOK_URL", "")
 _SERVICE_API_KEY      = os.getenv("SERVICE_API_KEY", "")
 
-_MAX_RETRIES    = 3
-_RETRY_DELAY    = 1.0
-_TIMEOUT        = 10
-_PROGRESS_TIMEOUT = 3
+_MAX_RETRIES       = 3
+_RETRY_DELAY       = 1.0
+_TIMEOUT           = 10
+_PROGRESS_TIMEOUT  = 3
+_PROGRESS_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="progress-webhook")
 
 if not _WEBHOOK_URL:
-    logger.warning("SPRING_BOOT_WEBHOOK_URL no configurada — notificaciones finales DESACTIVADAS")
+    logger.warning("SPRING_BOOT_WEBHOOK_URL no configurada - notificaciones finales DESACTIVADAS")
 if not _PROGRESS_WEBHOOK_URL:
-    logger.warning("SPRING_BOOT_PROGRESS_WEBHOOK_URL no configurada — notificaciones de progreso DESACTIVADAS")
+    logger.warning("SPRING_BOOT_PROGRESS_WEBHOOK_URL no configurada - notificaciones de progreso DESACTIVADAS")
 if not _SERVICE_API_KEY:
-    logger.warning("SERVICE_API_KEY no configurada — Spring Boot rechazará los webhooks")
+    logger.warning("SERVICE_API_KEY no configurada - Spring Boot rechazará los webhooks")
 
 _HEADERS = {"Content-Type": "application/json", "X-Service-Key": _SERVICE_API_KEY}
 
@@ -97,9 +99,10 @@ def notify_job_cancelled(job_id: str, job_data: dict) -> bool:
 
 
 def notify_progress(job_id: str, progress_data: Dict[str, Any]) -> bool:
-    """Best-effort: no reintenta si falla."""
+    """Encola el webhook de progreso sin bloquear el pipeline de procesamiento."""
     if not _PROGRESS_WEBHOOK_URL:
         return False
+
     payload = {
         "job_id":          job_id,
         "status":          "processing",
@@ -109,14 +112,33 @@ def notify_progress(job_id: str, progress_data: Dict[str, Any]) -> bool:
         "elapsed_seconds": progress_data.get("elapsed_seconds"),
         "message":         progress_data.get("message", "Procesando..."),
     }
+
     try:
-        response = requests.post(_PROGRESS_WEBHOOK_URL, json=payload, headers=_HEADERS, timeout=_PROGRESS_TIMEOUT)
-        return response.status_code in (200, 201, 204)
-    except (requests.Timeout, requests.ConnectionError):
+        _PROGRESS_EXECUTOR.submit(_send_progress_once, job_id, payload)
+        return True
+    except RuntimeError as e:
+        logger.warning("No se pudo encolar webhook de progreso | job_id=%s | %s", job_id, e)
         return False
+
+
+def _send_progress_once(job_id: str, payload: dict) -> None:
+    try:
+        response = requests.post(
+            _PROGRESS_WEBHOOK_URL,
+            json=payload,
+            headers=_HEADERS,
+            timeout=_PROGRESS_TIMEOUT,
+        )
+        if response.status_code not in (200, 201, 204):
+            logger.warning(
+                "Webhook de progreso rechazado | job_id=%s | status=%d",
+                job_id,
+                response.status_code,
+            )
+    except (requests.Timeout, requests.ConnectionError):
+        logger.debug("Webhook de progreso no disponible | job_id=%s", job_id)
     except Exception as e:
         logger.warning("Webhook de progreso error | job_id=%s | %s", job_id, e)
-        return False
 
 
 def _send_with_retry(job_id: str, payload: dict) -> bool:
@@ -132,8 +154,13 @@ def _send_with_retry(job_id: str, payload: dict) -> bool:
                 logger.error("Webhook rechazado | job_id=%s | status=%d", job_id, response.status_code)
                 return False
 
-            logger.warning("Webhook error de servidor | job_id=%s | status=%d | attempt=%d/%d",
-                           job_id, response.status_code, attempt, _MAX_RETRIES)
+            logger.warning(
+                "Webhook error de servidor | job_id=%s | status=%d | attempt=%d/%d",
+                job_id,
+                response.status_code,
+                attempt,
+                _MAX_RETRIES,
+            )
 
         except requests.Timeout:
             logger.warning("Webhook timeout | job_id=%s | attempt=%d/%d", job_id, attempt, _MAX_RETRIES)
