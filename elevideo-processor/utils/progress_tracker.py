@@ -77,7 +77,7 @@ PHASE_MESSAGES: Dict[ProcessingPhase, str] = {
 }
 
 _NOTIFY_MIN_PROGRESS_DELTA = 1
-_NOTIFY_MIN_INTERVAL       = 5.0   # segundos
+_NOTIFY_MIN_INTERVAL       = 5.0
 
 
 class ProgressTracker:
@@ -86,19 +86,19 @@ class ProgressTracker:
         self.job_id           = job_id
         self.update_callback  = update_callback
 
-        self.current_phase:       Optional[ProcessingPhase]           = None
-        self.progress_percentage: int                                  = 0
-        self.start_time:          Optional[datetime]                   = None
-        self.completion_time:     Optional[datetime]                   = None
-        self.phase_timestamps:    Dict[ProcessingPhase, datetime]      = {}
-        self.phases_completed:    list                                  = []
-        self.frames_processed:    int                                   = 0
-        self.total_frames:        Optional[int]                        = None
-        self.metadata:            Dict[str, Any]                       = {}
+        self.current_phase:       Optional[ProcessingPhase]      = None
+        self.progress_percentage: int                             = 0
+        self.start_time:          Optional[datetime]              = None
+        self.completion_time:     Optional[datetime]              = None
+        self.phase_timestamps:    Dict[ProcessingPhase, datetime] = {}
+        self.phases_completed:    list                            = []
+        self.frames_processed:    int                             = 0
+        self.total_frames:        Optional[int]                   = None
+        self.metadata:            Dict[str, Any]                  = {}
 
-        self._last_notified_progress: int                         = -1
-        self._last_notified_phase:    Optional[ProcessingPhase]   = None
-        self._last_notification_time: float                       = 0.0
+        self._last_notified_progress: int                       = -1
+        self._last_notified_phase:    Optional[ProcessingPhase] = None
+        self._last_notification_time: float                     = 0.0
 
     def start(self) -> None:
         self.start_time = datetime.utcnow()
@@ -109,6 +109,7 @@ class ProgressTracker:
         phase: ProcessingPhase,
         message: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        notify: bool = True,
     ) -> None:
         self.current_phase       = phase
         self.progress_percentage = PHASE_PROGRESS.get(phase, 0)
@@ -120,11 +121,16 @@ class ProgressTracker:
             self.metadata.update(metadata)
 
         msg = message or PHASE_MESSAGES.get(phase, str(phase))
-        logger.info("Progreso | job_id=%s | phase=%s | %d%% | %.1fs | %s",
-                    self.job_id, phase.value, self.progress_percentage,
-                    self._elapsed(), msg)
+        logger.info(
+            "Progreso | job_id=%s | phase=%s | %d%% | %.1fs | %s",
+            self.job_id,
+            phase.value,
+            self.progress_percentage,
+            self._elapsed(),
+            msg,
+        )
 
-        if self._should_notify():
+        if notify and self._should_notify():
             self._notify(msg)
 
     def update_progress(self, percentage: int, message: Optional[str] = None) -> None:
@@ -151,34 +157,36 @@ class ProgressTracker:
 
     def complete(self, success: bool = True) -> None:
         self.completion_time = datetime.utcnow()
-        if success:
-            self.update_phase(ProcessingPhase.COMPLETED)
-        else:
-            self.current_phase       = ProcessingPhase.FAILED
-            self.progress_percentage = 0
+        phase = ProcessingPhase.COMPLETED if success else ProcessingPhase.FAILED
 
-        phase   = ProcessingPhase.COMPLETED if success else ProcessingPhase.FAILED
-        logger.info("Procesamiento %s | job_id=%s | total=%.2fs",
-                    "completado" if success else "falló", self.job_id, self._elapsed())
+        # Registrar la fase final sin disparar el callback y emitir una sola notificación forzada.
+        self.update_phase(phase, notify=False)
+
+        logger.info(
+            "Procesamiento %s | job_id=%s | total=%.2fs",
+            "completado" if success else "falló",
+            self.job_id,
+            self._elapsed(),
+        )
         self._notify(PHASE_MESSAGES[phase], force=True)
 
     def get_status(self) -> Dict[str, Any]:
         elapsed = self._elapsed()
         eta     = self._eta()
         return {
-            "job_id":             self.job_id,
-            "phase":              self.current_phase.value if self.current_phase else None,
-            "progress":           self.progress_percentage,
-            "message":            PHASE_MESSAGES.get(self.current_phase, "Procesando..."),
-            "elapsed_seconds":    elapsed,
-            "elapsed_formatted":  _fmt(elapsed),
-            "eta_seconds":        eta,
-            "eta_formatted":      _fmt(eta) if eta is not None else None,
-            "start_time":         self.start_time.isoformat() if self.start_time else None,
-            "frames_processed":   self.frames_processed,
-            "total_frames":       self.total_frames,
-            "phases_completed":   [p.value for p in self.phases_completed],
-            "metadata":           self.metadata,
+            "job_id":            self.job_id,
+            "phase":             self.current_phase.value if self.current_phase else None,
+            "progress":          self.progress_percentage,
+            "message":           PHASE_MESSAGES.get(self.current_phase, "Procesando..."),
+            "elapsed_seconds":   elapsed,
+            "elapsed_formatted": _fmt(elapsed),
+            "eta_seconds":       eta,
+            "eta_formatted":     _fmt(eta) if eta is not None else None,
+            "start_time":        self.start_time.isoformat() if self.start_time else None,
+            "frames_processed":  self.frames_processed,
+            "total_frames":      self.total_frames,
+            "phases_completed":  [p.value for p in self.phases_completed],
+            "metadata":          self.metadata,
         }
 
     def _should_notify(self) -> bool:
@@ -197,9 +205,9 @@ class ProgressTracker:
             if message:
                 data["message"] = message
             self.update_callback(self.job_id, data)
-            self._last_notified_progress  = self.progress_percentage
-            self._last_notified_phase     = self.current_phase
-            self._last_notification_time  = time.time()
+            self._last_notified_progress = self.progress_percentage
+            self._last_notified_phase = self.current_phase
+            self._last_notification_time = time.time()
         except Exception as e:
             logger.error("Error en callback de progreso | job_id=%s | %s", self.job_id, e)
 
