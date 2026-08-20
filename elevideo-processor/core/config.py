@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,37 @@ SCENE_ANALYSIS: dict = {
     "enabled":                 False,
     "scene_change_threshold":  0.3,
 }
+
+
+_RUNTIME_DEFAULTS = {
+    "face_detection": deepcopy(FACE_DETECTION),
+    "stabilization": deepcopy(STABILIZATION),
+    "crop_settings": deepcopy(CROP_SETTINGS),
+    "keyframe_settings": deepcopy(KEYFRAME_SETTINGS),
+    "encoding_settings": deepcopy(ENCODING_SETTINGS),
+    "performance_settings": deepcopy(PERFORMANCE_SETTINGS),
+    "quality_metrics": deepcopy(QUALITY_METRICS),
+    "conversion_mode": deepcopy(CONVERSION_MODE),
+    "scene_analysis": deepcopy(SCENE_ANALYSIS),
+}
+
+
+def _restore(target: dict, source: dict) -> None:
+    target.clear()
+    target.update(deepcopy(source))
+
+
+def reset_runtime_config() -> None:
+    """Restaura la configuración mutable para que un job no contamine al siguiente."""
+    _restore(FACE_DETECTION, _RUNTIME_DEFAULTS["face_detection"])
+    _restore(STABILIZATION, _RUNTIME_DEFAULTS["stabilization"])
+    _restore(CROP_SETTINGS, _RUNTIME_DEFAULTS["crop_settings"])
+    _restore(KEYFRAME_SETTINGS, _RUNTIME_DEFAULTS["keyframe_settings"])
+    _restore(ENCODING_SETTINGS, _RUNTIME_DEFAULTS["encoding_settings"])
+    _restore(PERFORMANCE_SETTINGS, _RUNTIME_DEFAULTS["performance_settings"])
+    _restore(QUALITY_METRICS, _RUNTIME_DEFAULTS["quality_metrics"])
+    _restore(CONVERSION_MODE, _RUNTIME_DEFAULTS["conversion_mode"])
+    _restore(SCENE_ANALYSIS, _RUNTIME_DEFAULTS["scene_analysis"])
 
 
 def set_conversion_mode(mode: str) -> None:
