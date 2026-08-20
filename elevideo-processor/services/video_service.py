@@ -54,10 +54,10 @@ class VideoProcessingService:
         notify_progress(job_id, data)
 
     def process_video(self, request: VideoProcessRequest, job_id: str) -> Tuple[str, dict]:
-        t0               = time.time()
-        local_input_path = None
+        t0                = time.time()
+        local_input_path  = None
         local_output_path = None
-        perf             = self.performance_monitor
+        perf              = self.performance_monitor
 
         base_tracker = ProgressTracker(job_id, update_callback=self._publish_progress)
         base_tracker.start()
@@ -87,19 +87,19 @@ class VideoProcessingService:
             tracker.update_phase(ProcessingPhase.DOWNLOAD_COMPLETE)
 
             with ErrorContext("configuración", job_id=job_id):
-                self._configure(request)
+                runtime_config = self._configure(request)
 
             tracker.update_phase(ProcessingPhase.ANALYZING)
             t_proc = time.time()
             with ErrorContext("procesamiento de video", cleanup=_cleanup, job_id=job_id):
-                strategy  = get_strategy(request.processing_mode)
-                detector  = EnhancedFaceDetector(config)
-                stabilizer = AdaptiveStabilizer(config)
+                strategy   = get_strategy(request.processing_mode)
+                detector   = EnhancedFaceDetector(runtime_config)
+                stabilizer = AdaptiveStabilizer(runtime_config)
 
                 local_output_path, metrics = strategy.process(
                     local_input_path=local_input_path,
                     request=request,
-                    config=config,
+                    config=runtime_config,
                     detector=detector,
                     stabilizer=stabilizer,
                     encoder=self.hw_encoder,
@@ -215,9 +215,8 @@ class VideoProcessingService:
     def _upload(self, local_path: str, job_id: str, folder: str) -> str:
         return self.cloudinary.upload_video(local_path, job_id, folder)
 
-    def _configure(self, request: VideoProcessRequest) -> None:
-        # Cada job empieza desde los mismos defaults; ninguna opción avanzada se filtra al siguiente.
-        config.reset_runtime_config()
+    def _configure(self, request: VideoProcessRequest):
+        runtime_config = config.create_runtime_config()
 
         # Aplicar preset de plataforma primero, luego sobrescribir con la calidad del usuario.
         platform_preset = {
@@ -225,7 +224,7 @@ class VideoProcessingService:
             Platform.instagram:      "instagram",
             Platform.youtube_shorts: "youtube_shorts",
         }
-        config.apply_preset(platform_preset[request.platform])
+        config.apply_preset(platform_preset[request.platform], runtime=runtime_config)
 
         quality_overrides = {
             QualityLevel.fast:   {"sample_rate": 6, "use_multipass": False, "quality_preset": "fast"},
@@ -233,39 +232,41 @@ class VideoProcessingService:
             QualityLevel.high:   {"sample_rate": 3, "use_multipass": True,  "quality_preset": "high"},
         }
         overrides = quality_overrides[request.quality]
-        config.PERFORMANCE_SETTINGS["sample_rate"]   = overrides["sample_rate"]
-        config.PERFORMANCE_SETTINGS["use_multipass"] = overrides["use_multipass"]
-        config.ENCODING_SETTINGS["quality_preset"]   = overrides["quality_preset"]
+        runtime_config.PERFORMANCE_SETTINGS["sample_rate"]   = overrides["sample_rate"]
+        runtime_config.PERFORMANCE_SETTINGS["use_multipass"] = overrides["use_multipass"]
+        runtime_config.ENCODING_SETTINGS["quality_preset"]   = overrides["quality_preset"]
 
         conversion_mode = BACKGROUND_TO_CONVERSION_MODE[request.background_mode]
-        config.CONVERSION_MODE["mode"] = conversion_mode
+        runtime_config.CONVERSION_MODE["mode"] = conversion_mode
         if conversion_mode == "full":
-            config.CONVERSION_MODE["modes"]["full"]["blur_background"] = BACKGROUND_TO_BLUR[request.background_mode]
+            runtime_config.CONVERSION_MODE["modes"]["full"]["blur_background"] = BACKGROUND_TO_BLUR[request.background_mode]
 
         if request.advanced_options:
             adv = request.advanced_options
 
             # Nitidez aplica tanto a smart crop como a fondos completos.
             if adv.apply_sharpening is not None:
-                config.ENCODING_SETTINGS["apply_unsharp"] = adv.apply_sharpening
+                runtime_config.ENCODING_SETTINGS["apply_unsharp"] = adv.apply_sharpening
 
             # Estas opciones solo tienen significado cuando existe seguimiento de rostro.
             if conversion_mode == "smart_crop":
                 if adv.max_camera_speed is not None:
-                    config.STABILIZATION["max_velocity_px_per_frame"] = adv.max_camera_speed
+                    runtime_config.STABILIZATION["max_velocity_px_per_frame"] = adv.max_camera_speed
                 if adv.use_rule_of_thirds is not None:
-                    config.CROP_SETTINGS["use_rule_of_thirds"] = adv.use_rule_of_thirds
+                    runtime_config.CROP_SETTINGS["use_rule_of_thirds"] = adv.use_rule_of_thirds
                 if adv.edge_padding is not None:
-                    config.CROP_SETTINGS["edge_padding"] = adv.edge_padding
+                    runtime_config.CROP_SETTINGS["edge_padding"] = adv.edge_padding
 
         logger.info(
             "Config aplicada | preset=%s | mode=%s | sample_rate=1/%s | multipass=%s | encoding=%s",
             QUALITY_TO_PRESET[request.quality],
-            config.CONVERSION_MODE["mode"],
-            config.PERFORMANCE_SETTINGS["sample_rate"],
-            config.PERFORMANCE_SETTINGS["use_multipass"],
-            config.ENCODING_SETTINGS["quality_preset"],
+            runtime_config.CONVERSION_MODE["mode"],
+            runtime_config.PERFORMANCE_SETTINGS["sample_rate"],
+            runtime_config.PERFORMANCE_SETTINGS["use_multipass"],
+            runtime_config.ENCODING_SETTINGS["quality_preset"],
         )
+
+        return runtime_config
 
 
 def create_video_service(cloudinary_service: CloudinaryService) -> VideoProcessingService:
