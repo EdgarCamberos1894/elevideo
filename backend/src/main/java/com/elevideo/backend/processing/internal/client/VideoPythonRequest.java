@@ -1,6 +1,5 @@
 package com.elevideo.backend.processing.internal.client;
 
-import com.elevideo.backend.processing.api.dto.AdvancedOptions;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
@@ -34,7 +33,7 @@ public class VideoPythonRequest {
     private Integer shortAutoDuration;
 
     @JsonProperty("advanced_options")
-    private AdvancedOptions advancedOptions;
+    private AdvancedOptionsDto advancedOptions;
 
     @Data
     @Builder
@@ -45,5 +44,23 @@ public class VideoPythonRequest {
         private Double startTime;
 
         private Integer duration;
+    }
+
+    @Data
+    @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class AdvancedOptionsDto {
+
+        @JsonProperty("max_camera_speed")
+        private Integer maxCameraSpeed;
+
+        @JsonProperty("apply_sharpening")
+        private Boolean applySharpening;
+
+        @JsonProperty("use_rule_of_thirds")
+        private Boolean useRuleOfThirds;
+
+        @JsonProperty("edge_padding")
+        private Integer edgePadding;
     }
 }
