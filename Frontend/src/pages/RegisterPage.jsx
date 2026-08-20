@@ -58,8 +58,13 @@ export function RegisterPage() {
     try {
       const { confirmPassword, ...registerData } = data;
       await authApi.register(registerData);
-      toast.success('¡Cuenta creada! Revisa tu email para verificarla.');
-      navigate('/login');
+      navigate('/login', {
+        replace: true,
+        state: {
+          registrationSuccess: true,
+          verificationEmail: registerData.email,
+        },
+      });
     } catch (error) {
       const message = error.response?.data?.message || 'Error al registrarse';
       toast.error(message);
