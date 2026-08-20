@@ -3,7 +3,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 
 import cv2
 import numpy as np
@@ -37,34 +37,60 @@ def process_video_enhanced(
     logger.info("Procesando | %dx%d | %d frames @ %.2ffps | mode=%s | encoder=%s",
                 width, height, total_frames, fps, config.CONVERSION_MODE["mode"], encoder)
 
-    ar         = width / height
-    crop_w     = config.CROP_SETTINGS["width"]
-    crop_h     = config.CROP_SETTINGS["height"]
+    output_w = config.CROP_SETTINGS["width"]
+    output_h = config.CROP_SETTINGS["height"]
+    ar       = width / height if height else 0
 
-    # Ya vertical con dimensiones exactas
-    if _VERTICAL_AR_LOW <= ar <= _VERTICAL_AR_HIGH:
-        if width == crop_w and height == crop_h:
-            logger.info("Video ya es vertical con dimensiones exactas — sin procesamiento")
-            return input_path, _base_metrics(total_frames, reason="already_vertical_exact")
-        logger.info("Video vertical, dimensiones distintas — re-escalando")
-        return _rescale_vertical(input_path, config, encoder)
-
-    # Video más pequeño que el crop deseado en cualquier dimensión → modo full
-    if width <= crop_w or height <= crop_h:
-        logger.warning("Video más pequeño que crop (%dx%d vs %dx%d) — modo full", width, height, crop_w, crop_h)
-        return _process_full(input_path, config, encoder)
-
-    # Video horizontal — modo full o smart crop
+    # Los modos full (barras negras / blur) siempre pasan por su pipeline para respetar
+    # el fondo elegido y la nitidez, incluso si el video ya es vertical.
     if config.CONVERSION_MODE["mode"] == "full":
         return _process_full(input_path, config, encoder)
 
-    return _process_smart_crop(input_path, config, detector, stabilizer,
-                                use_multipass, encoder, total_frames, fps, width, crop_w, crop_h)
+    # Un video ya 9:16 no necesita seguimiento horizontal. Solo se reescala si hace falta.
+    if _VERTICAL_AR_LOW <= ar <= _VERTICAL_AR_HIGH:
+        if width == output_w and height == output_h and not config.ENCODING_SETTINGS.get("apply_unsharp", False):
+            logger.info("Video ya es vertical con dimensiones exactas — sin reprocesamiento")
+            return input_path, _base_metrics(total_frames, reason="already_vertical_exact")
+        logger.info("Video vertical — re-escalando al preset de salida")
+        return _rescale_vertical(input_path, config, encoder)
+
+    source_crop_w, source_crop_h = _calculate_source_crop_size(width, height, output_w, output_h)
+    logger.info(
+        "Smart crop geométrico | input=%dx%d | source_crop=%dx%d | output=%dx%d",
+        width, height, source_crop_w, source_crop_h, output_w, output_h,
+    )
+
+    return _process_smart_crop(
+        input_path, config, detector, stabilizer,
+        use_multipass, encoder, total_frames, fps,
+        width, source_crop_w, source_crop_h,
+    )
+
+
+def _calculate_source_crop_size(frame_w: int, frame_h: int, output_w: int, output_h: int) -> Tuple[int, int]:
+    """Calcula el mayor rectángulo con la proporción de salida que cabe en el frame original."""
+    if frame_w <= 0 or frame_h <= 0 or output_w <= 0 or output_h <= 0:
+        raise ValueError("Dimensiones de video inválidas para calcular el recorte")
+
+    target_ar = output_w / output_h
+    frame_ar  = frame_w / frame_h
+
+    if frame_ar >= target_ar:
+        crop_h = frame_h
+        crop_w = int(round(crop_h * target_ar))
+    else:
+        crop_w = frame_w
+        crop_h = int(round(crop_w / target_ar))
+
+    # YUV420 funciona de forma más predecible con dimensiones pares.
+    crop_w = max(2, min(frame_w, crop_w - (crop_w % 2)))
+    crop_h = max(2, min(frame_h, crop_h - (crop_h % 2)))
+    return crop_w, crop_h
 
 
 def _process_smart_crop(
     input_path, config, detector, stabilizer, use_multipass,
-    encoder, total_frames, fps, frame_width, crop_w, crop_h,
+    encoder, total_frames, fps, frame_width, source_crop_w, source_crop_h,
 ) -> Tuple[str, dict]:
     from processing.ffmpeg_ultra import crop_video_ultra
 
@@ -72,12 +98,12 @@ def _process_smart_crop(
         from processing.stabilization_enhanced import MultiPassStabilizer
         multipass = MultiPassStabilizer(config)
 
-    sample_rate     = config.PERFORMANCE_SETTINGS["sample_rate"]
-    positions       = []
-    quality_metrics = []
-    frame_number    = 0
+    sample_rate      = config.PERFORMANCE_SETTINGS["sample_rate"]
+    positions        = []
+    quality_metrics  = []
+    frame_number     = 0
     frames_processed = 0
-    t0              = time.time()
+    t0               = time.time()
 
     cap = cv2.VideoCapture(input_path)
     while True:
@@ -86,13 +112,12 @@ def _process_smart_crop(
             break
 
         if frame_number % sample_rate == 0:
-            ts   = frame_number / fps if fps > 0 else 0
+            ts    = frame_number / fps if fps > 0 else 0
             faces = detector.detect(frame)
             face  = detector.get_primary_face(faces)
 
             if face:
-                crop_x, _ = _optimal_composition(face, (frame_width, cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                                                  (crop_w, crop_h), config)
+                crop_x = _optimal_horizontal_composition(face, frame_width, source_crop_w, config)
                 q = face.get("quality")
                 if use_multipass:
                     multipass.add_position(ts, crop_x, q)
@@ -109,11 +134,12 @@ def _process_smart_crop(
                     "is_reliable": reliable_val,
                 })
             else:
+                center_x = max(0, (frame_width - source_crop_w) // 2)
                 if use_multipass:
-                    last = multipass._buffer[-1]["position"] if multipass._buffer else (frame_width - crop_w) // 2
+                    last = multipass._buffer[-1]["position"] if multipass._buffer else center_x
                     multipass.add_position(ts, last, None)
                 else:
-                    fallback = positions[-1][1] if positions else (frame_width - crop_w) // 2
+                    fallback = positions[-1][1] if positions else center_x
                     sx = stabilizer.stabilize(None) if hasattr(stabilizer, "stabilize") else fallback
                     positions.append((ts, sx if sx is not None else fallback))
 
@@ -125,8 +151,6 @@ def _process_smart_crop(
     if use_multipass:
         positions = multipass.process()
 
-    # Fallback si muy pocos rostros detectados
-    # reliability = fracción de frames analizados donde se detectó al menos una cara
     total_analyzed = frames_processed
     faces_detected = len(quality_metrics)
     reliability    = faces_detected / total_analyzed if total_analyzed > 0 else 0.0
@@ -139,17 +163,26 @@ def _process_smart_crop(
         return _process_full(input_path, config, encoder)
 
     output_path = _output_path(input_path, config.CONVERSION_MODE["mode"])
-    success     = crop_video_ultra(input_path, output_path, positions, config, encoder=encoder)
+    success = crop_video_ultra(
+        input_path,
+        output_path,
+        positions,
+        config,
+        encoder=encoder,
+        source_crop_size=(source_crop_w, source_crop_h),
+    )
     if not success:
         raise RuntimeError("Error en el encoding del video")
 
     metrics = {
-        "total_frames":    total_frames,
-        "frames_processed": frames_processed,
-        "keyframes":        len(positions),
-        "analysis_time":    time.time() - t0,
-        "overall_quality":  1.0,
-        "reliability_rate": reliability,
+        "total_frames":       total_frames,
+        "frames_processed":   frames_processed,
+        "keyframes":          len(positions),
+        "analysis_time":      time.time() - t0,
+        "overall_quality":    1.0,
+        "reliability_rate":   reliability,
+        "source_crop_width":  source_crop_w,
+        "source_crop_height": source_crop_h,
     }
     if quality_metrics:
         avg_c = np.mean([m["confidence"] for m in quality_metrics])
@@ -169,22 +202,22 @@ def _process_full(input_path: str, config, encoder: str) -> Tuple[str, dict]:
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     cap.release()
 
-    crop_w = config.CROP_SETTINGS["width"]
-    crop_h = config.CROP_SETTINGS["height"]
+    output_w = config.CROP_SETTINGS["width"]
+    output_h = config.CROP_SETTINGS["height"]
 
-    if width == crop_w and height == crop_h:
+    # Si ya coincide exactamente y no hay nitidez adicional, no hace falta recodificar.
+    if (
+        width == output_w
+        and height == output_h
+        and not config.ENCODING_SETTINGS.get("apply_unsharp", False)
+    ):
         return input_path, _base_metrics(reason="already_exact")
 
-    ar = width / height
-    if _VERTICAL_AR_LOW <= ar <= _VERTICAL_AR_HIGH:
-        return _rescale_vertical(input_path, config, encoder)
-
-    # Forzar modo full temporalmente para el crop_video_ultra
     original_mode = config.CONVERSION_MODE.get("mode")
     config.CONVERSION_MODE["mode"] = "full"
     try:
         output = _output_path(input_path, "full")
-        ok     = crop_video_ultra(input_path, output, [], config, encoder=encoder)
+        ok = crop_video_ultra(input_path, output, [], config, encoder=encoder)
         if not ok:
             raise RuntimeError("Error en el encoding del video en modo full")
         return output, {**_base_metrics(reason="full_mode"), "mode": "full"}
@@ -193,16 +226,24 @@ def _process_full(input_path: str, config, encoder: str) -> Tuple[str, dict]:
 
 
 def _rescale_vertical(input_path: str, config, encoder: str) -> Tuple[str, dict]:
-    crop_w = config.CROP_SETTINGS["width"]
-    crop_h = config.CROP_SETTINGS["height"]
-    preset = config.ENCODING_SETTINGS["quality_preset"]
-    s      = config.ENCODING_SETTINGS["presets"][preset]
+    output_w = config.CROP_SETTINGS["width"]
+    output_h = config.CROP_SETTINGS["height"]
+    preset   = config.ENCODING_SETTINGS["quality_preset"]
+    s        = config.ENCODING_SETTINGS["presets"][preset]
+
+    filters = [
+        f"scale={output_w}:{output_h}:force_original_aspect_ratio=decrease",
+        f"pad={output_w}:{output_h}:(ow-iw)/2:(oh-ih)/2:color=black",
+    ]
+    if config.ENCODING_SETTINGS.get("apply_unsharp", False):
+        filters.append(f"unsharp={config.ENCODING_SETTINGS['unsharp_params']}")
 
     output = _output_path(input_path, "rescaled")
-    cmd    = ["ffmpeg", "-y", "-i", input_path,
-              "-vf", f"scale={crop_w}:{crop_h}:force_original_aspect_ratio=decrease,"
-                     f"pad={crop_w}:{crop_h}:(ow-iw)/2:(oh-ih)/2:color=black",
-              "-c:v", encoder, "-preset", s["preset"], "-crf", str(s["crf"])]
+    cmd = [
+        "ffmpeg", "-y", "-i", input_path,
+        "-vf", ",".join(filters),
+        "-c:v", encoder, "-preset", s["preset"], "-crf", str(s["crf"]),
+    ]
 
     if encoder == "libx264":
         cmd.extend(["-profile:v", s.get("profile", "high")])
@@ -219,30 +260,32 @@ def _rescale_vertical(input_path: str, config, encoder: str) -> Tuple[str, dict]
     return output, {**_base_metrics(reason="vertical_rescale"), "mode": "vertical_rescale"}
 
 
-def _optimal_composition(face: dict, frame_size, crop_size, config) -> Tuple[int, int]:
-    frame_w, _     = frame_size
-    crop_w, crop_h = crop_size
-    _, __, w, h    = face["bbox"]
-    cx, _          = face["center"]
-    cs             = config.CROP_SETTINGS
+def _optimal_horizontal_composition(face: dict, frame_w: int, crop_w: int, config) -> int:
+    cx, _ = face["center"]
+    cs    = config.CROP_SETTINGS
+
+    max_x = max(0, frame_w - crop_w)
+    if max_x == 0:
+        return 0
 
     if cs.get("use_rule_of_thirds", False):
-        ratio  = cx / frame_w
+        ratio  = cx / frame_w if frame_w else 0.5
         offset = cs.get("thirds_offset_factor", 0.15)
-        if ratio < 0.35:   target = crop_w * (0.33 - offset)
-        elif ratio > 0.65: target = crop_w * (0.67 + offset)
-        else:              target = crop_w * 0.5
+        if ratio < 0.35:
+            target = crop_w * (0.33 - offset)
+        elif ratio > 0.65:
+            target = crop_w * (0.67 + offset)
+        else:
+            target = crop_w * 0.5
     else:
         target = crop_w * 0.5
 
-    headroom     = cs.get("headroom_ratio", 0.18) * crop_h
-    face_h_ratio = h / frame_size[1] if frame_size[1] else 0
-    if face_h_ratio > 0.4:    headroom *= 0.7
-    elif face_h_ratio < 0.15: headroom *= 1.3  # noqa: F841 — reservado para composición futura
+    requested_padding = max(0, int(cs.get("edge_padding", 15)))
+    effective_padding = min(requested_padding, max_x // 2)
+    min_x             = effective_padding
+    max_allowed_x     = max(min_x, max_x - effective_padding)
 
-    padding = cs.get("edge_padding", 15)
-    crop_x  = int(np.clip(cx - target, padding, frame_w - crop_w - padding))
-    return crop_x, 0
+    return int(np.clip(cx - target, min_x, max_allowed_x))
 
 
 def _output_path(input_path: str, suffix: str) -> str:
@@ -255,7 +298,7 @@ def _output_path(input_path: str, suffix: str) -> str:
 
 def _base_metrics(total_frames: int = 0, reason: str = "") -> dict:
     return {
-        "total_frames":    total_frames,
+        "total_frames":     total_frames,
         "frames_processed": 0,
         "keyframes":        0,
         "analysis_time":    0,
