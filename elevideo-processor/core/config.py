@@ -1,5 +1,6 @@
 import logging
 from copy import deepcopy
+from types import SimpleNamespace
 
 logger = logging.getLogger(__name__)
 
@@ -122,16 +123,28 @@ SCENE_ANALYSIS: dict = {
 
 
 _RUNTIME_DEFAULTS = {
-    "face_detection": deepcopy(FACE_DETECTION),
-    "stabilization": deepcopy(STABILIZATION),
-    "crop_settings": deepcopy(CROP_SETTINGS),
-    "keyframe_settings": deepcopy(KEYFRAME_SETTINGS),
-    "encoding_settings": deepcopy(ENCODING_SETTINGS),
-    "performance_settings": deepcopy(PERFORMANCE_SETTINGS),
-    "quality_metrics": deepcopy(QUALITY_METRICS),
-    "conversion_mode": deepcopy(CONVERSION_MODE),
-    "scene_analysis": deepcopy(SCENE_ANALYSIS),
+    "FACE_DETECTION": deepcopy(FACE_DETECTION),
+    "STABILIZATION": deepcopy(STABILIZATION),
+    "CROP_SETTINGS": deepcopy(CROP_SETTINGS),
+    "KEYFRAME_SETTINGS": deepcopy(KEYFRAME_SETTINGS),
+    "ENCODING_SETTINGS": deepcopy(ENCODING_SETTINGS),
+    "PERFORMANCE_SETTINGS": deepcopy(PERFORMANCE_SETTINGS),
+    "QUALITY_METRICS": deepcopy(QUALITY_METRICS),
+    "CONVERSION_MODE": deepcopy(CONVERSION_MODE),
+    "SCENE_ANALYSIS": deepcopy(SCENE_ANALYSIS),
 }
+
+
+def create_runtime_config() -> SimpleNamespace:
+    """Crea una configuración mutable aislada para un único job."""
+    return SimpleNamespace(**{
+        name: deepcopy(value)
+        for name, value in _RUNTIME_DEFAULTS.items()
+    })
+
+
+def _dict(runtime, name: str) -> dict:
+    return getattr(runtime, name) if runtime is not None else globals()[name]
 
 
 def _restore(target: dict, source: dict) -> None:
@@ -140,33 +153,29 @@ def _restore(target: dict, source: dict) -> None:
 
 
 def reset_runtime_config() -> None:
-    """Restaura la configuración mutable para que un job no contamine al siguiente."""
-    _restore(FACE_DETECTION, _RUNTIME_DEFAULTS["face_detection"])
-    _restore(STABILIZATION, _RUNTIME_DEFAULTS["stabilization"])
-    _restore(CROP_SETTINGS, _RUNTIME_DEFAULTS["crop_settings"])
-    _restore(KEYFRAME_SETTINGS, _RUNTIME_DEFAULTS["keyframe_settings"])
-    _restore(ENCODING_SETTINGS, _RUNTIME_DEFAULTS["encoding_settings"])
-    _restore(PERFORMANCE_SETTINGS, _RUNTIME_DEFAULTS["performance_settings"])
-    _restore(QUALITY_METRICS, _RUNTIME_DEFAULTS["quality_metrics"])
-    _restore(CONVERSION_MODE, _RUNTIME_DEFAULTS["conversion_mode"])
-    _restore(SCENE_ANALYSIS, _RUNTIME_DEFAULTS["scene_analysis"])
+    """Compatibilidad para consumidores legacy que aún usan los diccionarios globales."""
+    for name, default in _RUNTIME_DEFAULTS.items():
+        _restore(globals()[name], default)
 
 
-def set_conversion_mode(mode: str) -> None:
-    CONVERSION_MODE["mode"] = mode
+def set_conversion_mode(mode: str, runtime=None) -> None:
+    _dict(runtime, "CONVERSION_MODE")["mode"] = mode
 
 
-def log_current_config() -> None:
+def log_current_config(runtime=None) -> None:
+    conversion_mode = _dict(runtime, "CONVERSION_MODE")
+    encoding        = _dict(runtime, "ENCODING_SETTINGS")
+    performance     = _dict(runtime, "PERFORMANCE_SETTINGS")
     logger.info(
         "Config activa | mode=%s | preset=%s | sample_rate=1/%s | multipass=%s",
-        CONVERSION_MODE["mode"],
-        ENCODING_SETTINGS["quality_preset"],
-        PERFORMANCE_SETTINGS["sample_rate"],
-        PERFORMANCE_SETTINGS["use_multipass"],
+        conversion_mode["mode"],
+        encoding["quality_preset"],
+        performance["sample_rate"],
+        performance["use_multipass"],
     )
 
 
-def apply_preset(preset_name: str) -> None:
+def apply_preset(preset_name: str, runtime=None) -> None:
     presets = {
         "ultra_quality": {
             "performance": {"sample_rate": 2, "use_multipass": True},
@@ -201,26 +210,32 @@ def apply_preset(preset_name: str) -> None:
     }
 
     base_name, overrides = platform_aliases.get(preset_name, (preset_name, {}))
-    config = presets.get(base_name)
+    preset = presets.get(base_name)
 
-    if config is None:
+    if preset is None:
         logger.warning("Preset desconocido: %s", preset_name)
         return
 
-    PERFORMANCE_SETTINGS.update(config.get("performance", {}))
-    STABILIZATION.update(config.get("stabilization", {}))
-    KEYFRAME_SETTINGS.update(config.get("keyframes", {}))
-    ENCODING_SETTINGS.update(config.get("encoding", {}))
+    performance   = _dict(runtime, "PERFORMANCE_SETTINGS")
+    stabilization = _dict(runtime, "STABILIZATION")
+    keyframes     = _dict(runtime, "KEYFRAME_SETTINGS")
+    encoding      = _dict(runtime, "ENCODING_SETTINGS")
+    crop_settings = _dict(runtime, "CROP_SETTINGS")
+
+    performance.update(preset.get("performance", {}))
+    stabilization.update(preset.get("stabilization", {}))
+    keyframes.update(preset.get("keyframes", {}))
+    encoding.update(preset.get("encoding", {}))
 
     if "crop" in overrides:
-        CROP_SETTINGS.update(overrides["crop"])
+        crop_settings.update(overrides["crop"])
     if "encoding" in overrides:
-        ENCODING_SETTINGS.update(overrides["encoding"])
+        encoding.update(overrides["encoding"])
 
     logger.info(
         "Preset aplicado: %s | encoding=%s | sample_rate=1/%s | multipass=%s",
         preset_name,
-        ENCODING_SETTINGS["quality_preset"],
-        PERFORMANCE_SETTINGS["sample_rate"],
-        PERFORMANCE_SETTINGS["use_multipass"],
+        encoding["quality_preset"],
+        performance["sample_rate"],
+        performance["use_multipass"],
     )
