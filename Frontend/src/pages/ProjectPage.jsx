@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/api/projects';
-import { videosApi } from '@/api/videos';
+import { MAX_VIDEO_SIZE_MB, validateVideoFile, videosApi } from '@/api/videos';
 import { Layout } from '@/components/Layout';
 import { VideoPreviewModal } from '@/components/VideoPreviewModal';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,6 @@ import {
   Play,
   Wand2,
   FileVideo,
-  Clock,
   HardDrive,
   Sparkles,
   Eye,
@@ -47,23 +46,23 @@ import {
 } from '@/components/ui/alert-dialog';
 
 const statusConfig = {
-  UPLOADED: { 
-    label: 'Listo', 
+  UPLOADED: {
+    label: 'Listo',
     className: 'bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400',
     icon: '✓'
   },
-  PROCESSING: { 
-    label: 'Procesando', 
+  PROCESSING: {
+    label: 'Procesando',
     className: 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400 status-processing',
     icon: '◌'
   },
-  READY: { 
-    label: 'Completado', 
+  READY: {
+    label: 'Completado',
     className: 'bg-purple-500/10 text-purple-600 border-purple-500/20 dark:text-purple-400',
     icon: '★'
   },
-  FAILED: { 
-    label: 'Error', 
+  FAILED: {
+    label: 'Error',
     className: 'bg-red-500/10 text-red-600 border-red-500/20 dark:text-red-400',
     icon: '✕'
   },
@@ -91,6 +90,7 @@ export function ProjectPage() {
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [videoTitle, setVideoTitle] = useState('');
   const [videoFile, setVideoFile] = useState(null);
+  const [videoFileError, setVideoFileError] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
@@ -107,17 +107,21 @@ export function ProjectPage() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: (formData) => videosApi.create(projectId, formData),
+    mutationFn: (formData) => videosApi.create(projectId, formData, {
+      onUploadProgress: setUploadProgress,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['videos', projectId] });
       setIsUploadOpen(false);
       setVideoTitle('');
       setVideoFile(null);
+      setVideoFileError('');
       setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       toast.success('¡Video subido exitosamente!');
     },
     onError: (error) => {
-      toast.error(error.response?.data?.message || 'Error al subir video');
+      toast.error(error.response?.data?.message || error.message || 'Error al subir video');
       setUploadProgress(0);
     },
   });
@@ -135,47 +139,66 @@ export function ProjectPage() {
     },
   });
 
+  const selectVideoFile = (file) => {
+    const validation = validateVideoFile(file);
+
+    if (!validation.valid) {
+      setVideoFile(null);
+      setVideoFileError(validation.message);
+      setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      toast.error(validation.message);
+      return false;
+    }
+
+    setVideoFile(file);
+    setVideoFileError('');
+    setUploadProgress(0);
+
+    if (!videoTitle) {
+      setVideoTitle(file.name.replace(/\.[^/.]+$/, ''));
+    }
+
+    return true;
+  };
+
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!videoFile || !videoTitle) return;
+    if (!videoTitle) return;
+
+    const validation = validateVideoFile(videoFile);
+    if (!validation.valid) {
+      setVideoFileError(validation.message);
+      toast.error(validation.message);
+      return;
+    }
 
     const formData = new FormData();
     formData.append('title', videoTitle);
     formData.append('video', videoFile);
 
-    setUploadProgress(10);
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => Math.min(prev + 10, 90));
-    }, 500);
-
-    try {
-      await uploadMutation.mutateAsync(formData);
-      setUploadProgress(100);
-    } finally {
-      clearInterval(progressInterval);
-    }
+    setUploadProgress(0);
+    await uploadMutation.mutateAsync(formData).catch(() => undefined);
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setVideoFile(file);
-      if (!videoTitle) {
-        setVideoTitle(file.name.replace(/\.[^/.]+$/, ''));
-      }
-    }
+    if (file) selectVideoFile(file);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('video/')) {
-      setVideoFile(file);
-      if (!videoTitle) {
-        setVideoTitle(file.name.replace(/\.[^/.]+$/, ''));
-      }
-    }
+    if (file) selectVideoFile(file);
+  };
+
+  const clearSelectedVideo = (e) => {
+    e?.stopPropagation();
+    setVideoFile(null);
+    setVideoFileError('');
+    setUploadProgress(0);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const project = projectData?.data || projectData;
@@ -210,7 +233,7 @@ export function ProjectPage() {
             </div>
             <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
               <DialogTrigger asChild>
-                <Button 
+                <Button
                   size="lg"
                   className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-purple-500/25"
                   data-testid="upload-video-button"
@@ -244,9 +267,11 @@ export function ProjectPage() {
                       <Label>Archivo de video</Label>
                       <div
                         className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                          isDragging 
-                            ? 'border-purple-500 bg-purple-500/10' 
-                            : 'border-border hover:border-purple-500/50 hover:bg-muted/50'
+                          videoFileError
+                            ? 'border-destructive/70 bg-destructive/5'
+                            : isDragging
+                              ? 'border-purple-500 bg-purple-500/10'
+                              : 'border-border hover:border-purple-500/50 hover:bg-muted/50'
                         }`}
                         onClick={() => fileInputRef.current?.click()}
                         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
@@ -272,11 +297,11 @@ export function ProjectPage() {
                                 {formatFileSize(videoFile.size)}
                               </p>
                             </div>
-                            <Button 
-                              type="button" 
-                              variant="ghost" 
+                            <Button
+                              type="button"
+                              variant="ghost"
                               size="sm"
-                              onClick={(e) => { e.stopPropagation(); setVideoFile(null); }}
+                              onClick={clearSelectedVideo}
                             >
                               Cambiar archivo
                             </Button>
@@ -291,17 +316,24 @@ export function ProjectPage() {
                                 Arrastra tu video aquí o haz clic
                               </p>
                               <p className="text-sm text-muted-foreground mt-1">
-                                MP4, MOV, AVI, WebM (máx. 200MB)
+                                MP4, MOV, AVI, WebM (máx. {MAX_VIDEO_SIZE_MB} MB)
                               </p>
                             </div>
                           </div>
                         )}
                       </div>
+                      {videoFileError && (
+                        <p className="text-sm text-destructive" role="alert">
+                          {videoFileError}
+                        </p>
+                      )}
                     </div>
-                    {uploadProgress > 0 && (
-                      <div className="space-y-2">
+                    {uploadMutation.isPending && (
+                      <div className="space-y-2" aria-live="polite">
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Subiendo...</span>
+                          <span className="text-muted-foreground">
+                            {uploadProgress < 100 ? 'Subiendo...' : 'Finalizando carga...'}
+                          </span>
                           <span className="font-medium">{uploadProgress}%</span>
                         </div>
                         <Progress value={uploadProgress} className="h-2" />
@@ -312,7 +344,7 @@ export function ProjectPage() {
                     <Button
                       type="submit"
                       className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                      disabled={!videoFile || !videoTitle || uploadMutation.isPending}
+                      disabled={!videoFile || !videoTitle || Boolean(videoFileError) || uploadMutation.isPending}
                       data-testid="upload-video-submit"
                     >
                       {uploadMutation.isPending ? (
@@ -361,7 +393,7 @@ export function ProjectPage() {
                     Sube un video horizontal y conviértelo automáticamente a formato vertical para TikTok, Instagram Reels y YouTube Shorts
                   </p>
                 </div>
-                <Button 
+                <Button
                   size="lg"
                   className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg"
                   onClick={() => setIsUploadOpen(true)}
@@ -376,10 +408,10 @@ export function ProjectPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {videos.map((video) => {
               const status = statusConfig[video.status] || statusConfig.UPLOADED;
-              
+
               return (
-                <Card 
-                  key={video.id} 
+                <Card
+                  key={video.id}
                   className="video-card card-3d overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm group"
                   data-testid={`video-card-${video.id}`}
                 >
@@ -407,10 +439,10 @@ export function ProjectPage() {
                         <Film className="h-12 w-12 text-white/50" />
                       </div>
                     )}
-                    
+
                     {/* Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    
+
                     {/* Play button */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                       <Button
@@ -444,9 +476,9 @@ export function ProjectPage() {
                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white"
                           >
                             <MoreVertical className="h-4 w-4" />
@@ -501,12 +533,12 @@ export function ProjectPage() {
                         </span>
                       )}
                     </div>
-                    <Link 
+                    <Link
                       to={`/projects/${projectId}/videos/${video.id}`}
                       className="inline-flex"
                     >
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                       >
                         <Wand2 className="mr-2 h-4 w-4" />
