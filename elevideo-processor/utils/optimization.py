@@ -45,9 +45,9 @@ class ConfigurationCache:
 class FrameSamplingOptimizer:
 
     def __init__(self, threshold: float = 30.0):
-        self.threshold       = threshold
-        self.last_frame      = None
-        self.frames_skipped  = 0
+        self.threshold        = threshold
+        self.last_frame       = None
+        self.frames_skipped   = 0
         self.frames_processed = 0
 
     def should_process_frame(self, frame) -> bool:
@@ -72,11 +72,13 @@ class FrameSamplingOptimizer:
         return False
 
     def get_stats(self) -> Dict[str, Any]:
-        total     = self.frames_processed + self.frames_skipped
+        total = self.frames_processed + self.frames_skipped
         skip_rate = self.frames_skipped / total * 100 if total > 0 else 0
-        return {"frames_processed": self.frames_processed,
-                "frames_skipped":   self.frames_skipped,
-                "skip_rate_percent": skip_rate}
+        return {
+            "frames_processed":    self.frames_processed,
+            "frames_skipped":      self.frames_skipped,
+            "skip_rate_percent":   skip_rate,
+        }
 
     def reset(self) -> None:
         self.last_frame       = None
@@ -92,9 +94,9 @@ class HardwareAccelerationDetector:
 
         try:
             if subprocess.run(["nvidia-smi"], capture_output=True, timeout=2).returncode == 0:
-                result["nvidia_nvenc"]        = True
+                result["nvidia_nvenc"] = True
                 result["recommended_encoder"] = "h264_nvenc"
-                logger.info("NVIDIA GPU detectada — usando h264_nvenc")
+                logger.info("NVIDIA GPU detectada - usando h264_nvenc")
                 return result
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
@@ -102,14 +104,14 @@ class HardwareAccelerationDetector:
         try:
             vainfo = subprocess.run(["vainfo"], capture_output=True, text=True, timeout=2)
             if "VAProfileH264" in vainfo.stdout:
-                result["intel_qsv"]           = True
+                result["intel_qsv"] = True
                 result["recommended_encoder"] = "h264_qsv"
-                logger.info("Intel QSV detectado — usando h264_qsv")
+                logger.info("Intel QSV detectado - usando h264_qsv")
                 return result
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 
-        logger.info("Sin aceleración por hardware — usando libx264")
+        logger.info("Sin aceleración por hardware - usando libx264")
         return result
 
     @staticmethod
@@ -142,8 +144,10 @@ class PerformanceMonitor:
     def __init__(self):
         self.metrics: Dict[str, Any] = {
             "total_processing_time": 0.0,
+            "pipeline_time":         0.0,
             "analysis_time":         0.0,
             "encoding_time":         0.0,
+            "preview_time":          0.0,
             "upload_time":           0.0,
             "download_time":         0.0,
             "frames_analyzed":       0,
@@ -154,8 +158,11 @@ class PerformanceMonitor:
         }
 
     def record_metric(self, name: str, value: Any) -> None:
-        if name in self.metrics and isinstance(self.metrics[name], (int, float)) and isinstance(value, (int, float)):
-            self.metrics[name] += value
+        current = self.metrics.get(name)
+        if isinstance(current, bool):
+            self.metrics[name] = bool(value)
+        elif isinstance(current, (int, float)) and isinstance(value, (int, float)):
+            self.metrics[name] = current + value
         else:
             self.metrics[name] = value
 
@@ -169,11 +176,21 @@ class PerformanceMonitor:
             summary["cache_hit_rate"] = summary["cache_hits"] / total_cache * 100
         return summary
 
-    def log_summary(self) -> None:
+    def log_summary(self, job_id: Optional[str] = None) -> None:
         s = self.get_summary()
-        logger.info("Performance | total=%.2fs | analysis=%.2fs | encoding=%.2fs | upload=%.2fs | hw=%s",
-                    s["total_processing_time"], s["analysis_time"],
-                    s["encoding_time"], s["upload_time"], s["hw_acceleration_used"])
+        logger.info(
+            "Performance | job_id=%s | total=%.2fs | pipeline=%.2fs | analysis=%.2fs | "
+            "encoding=%.2fs | preview=%.2fs | download=%.2fs | upload=%.2fs | hw=%s",
+            job_id or "-",
+            s["total_processing_time"],
+            s["pipeline_time"],
+            s["analysis_time"],
+            s["encoding_time"],
+            s["preview_time"],
+            s["download_time"],
+            s["upload_time"],
+            s["hw_acceleration_used"],
+        )
         if "optimization_rate" in s:
             logger.info("Frames skipped: %d (%.1f%%)", s["frames_skipped"], s["optimization_rate"])
         if "cache_hit_rate" in s:
