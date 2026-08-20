@@ -216,7 +216,10 @@ class VideoProcessingService:
         return self.cloudinary.upload_video(local_path, job_id, folder)
 
     def _configure(self, request: VideoProcessRequest) -> None:
-        # Aplicar preset de plataforma primero, luego sobrescribir con la calidad del usuario
+        # Cada job empieza desde los mismos defaults; ninguna opción avanzada se filtra al siguiente.
+        config.reset_runtime_config()
+
+        # Aplicar preset de plataforma primero, luego sobrescribir con la calidad del usuario.
         platform_preset = {
             Platform.tiktok:         "tiktok",
             Platform.instagram:      "instagram",
@@ -241,18 +244,28 @@ class VideoProcessingService:
 
         if request.advanced_options:
             adv = request.advanced_options
-            if adv.headroom_ratio     is not None: config.CROP_SETTINGS["headroom_ratio"]            = adv.headroom_ratio
-            if adv.smoothing_strength is not None: config.STABILIZATION["exponential_alpha"]         = adv.smoothing_strength
-            if adv.max_camera_speed   is not None: config.STABILIZATION["max_velocity_px_per_frame"] = adv.max_camera_speed
-            if adv.apply_sharpening   is not None: config.ENCODING_SETTINGS["apply_unsharp"]         = adv.apply_sharpening
-            if adv.use_rule_of_thirds is not None: config.CROP_SETTINGS["use_rule_of_thirds"]        = adv.use_rule_of_thirds
-            if adv.edge_padding       is not None: config.CROP_SETTINGS["edge_padding"]              = adv.edge_padding
 
-        logger.info("Config aplicada | preset=%s | sample_rate=1/%s | multipass=%s | encoding=%s",
-                    QUALITY_TO_PRESET[request.quality],
-                    config.PERFORMANCE_SETTINGS["sample_rate"],
-                    config.PERFORMANCE_SETTINGS["use_multipass"],
-                    config.ENCODING_SETTINGS["quality_preset"])
+            # Nitidez aplica tanto a smart crop como a fondos completos.
+            if adv.apply_sharpening is not None:
+                config.ENCODING_SETTINGS["apply_unsharp"] = adv.apply_sharpening
+
+            # Estas opciones solo tienen significado cuando existe seguimiento de rostro.
+            if conversion_mode == "smart_crop":
+                if adv.max_camera_speed is not None:
+                    config.STABILIZATION["max_velocity_px_per_frame"] = adv.max_camera_speed
+                if adv.use_rule_of_thirds is not None:
+                    config.CROP_SETTINGS["use_rule_of_thirds"] = adv.use_rule_of_thirds
+                if adv.edge_padding is not None:
+                    config.CROP_SETTINGS["edge_padding"] = adv.edge_padding
+
+        logger.info(
+            "Config aplicada | preset=%s | mode=%s | sample_rate=1/%s | multipass=%s | encoding=%s",
+            QUALITY_TO_PRESET[request.quality],
+            config.CONVERSION_MODE["mode"],
+            config.PERFORMANCE_SETTINGS["sample_rate"],
+            config.PERFORMANCE_SETTINGS["use_multipass"],
+            config.ENCODING_SETTINGS["quality_preset"],
+        )
 
 
 def create_video_service(cloudinary_service: CloudinaryService) -> VideoProcessingService:
