@@ -5,17 +5,15 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
 @Schema(name = "VideoProcessing.AdvancedOptions",
-        description = "Opciones avanzadas para el algoritmo de recorte y composición. Todos opcionales.")
+        description = "Opciones avanzadas efectivas para seguimiento, composición y nitidez. Todos opcionales.")
 public record AdvancedOptions(
 
-        @Min(0) @Max(1)
-        Double headroomRatio,
-
-        @Min(0) @Max(1)
-        Double smoothingStrength,
-
+        @Min(10) @Max(100)
         Integer maxCameraSpeed,
+
         Boolean applySharpening,
         Boolean useRuleOfThirds,
+
+        @Min(0) @Max(50)
         Integer edgePadding
 ) {}
