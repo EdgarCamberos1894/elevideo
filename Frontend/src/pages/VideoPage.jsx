@@ -132,6 +132,7 @@ export function VideoPage() {
   const { projectId, videoId } = useParams();
   const queryClient = useQueryClient();
   const prevJobsRef = useRef([]);
+  const resultsSectionRef = useRef(null);
 
   // Processing form state
   const [processingMode, setProcessingMode] = useState('vertical');
@@ -144,12 +145,20 @@ export function VideoPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [headroomRatio, setHeadroomRatio] = useState(0.15);
   const [smoothingStrength, setSmoothingStrength] = useState(0.75);
+  const [activeTab, setActiveTab] = useState('renditions');
 
   const [isDeleteRenditionOpen, setIsDeleteRenditionOpen] = useState(false);
   const [selectedRendition, setSelectedRendition] = useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewVideo, setPreviewVideo] = useState(null);
   const [previewRendition, setPreviewRendition] = useState(null);
+
+  const showProcessingTab = () => {
+    setActiveTab('jobs');
+    window.requestAnimationFrame(() => {
+      resultsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   const { data: videoData, isLoading: videoLoading } = useQuery({
     queryKey: ['video', projectId, videoId],
@@ -175,6 +184,7 @@ export function VideoPage() {
   useEffect(() => {
     const jobs = jobsData?.data?.content || jobsData?.content || [];
     const prevJobs = prevJobsRef.current;
+    let completedTransitionDetected = false;
 
     jobs.forEach((job) => {
       const prevJob = prevJobs.find((p) => (p.id || p.jobId) === (job.id || job.jobId));
@@ -185,10 +195,19 @@ export function VideoPage() {
         notifyProcessingComplete(videoData?.data?.title || 'Video', status);
 
         if (status === 'completed') {
-          refetchRenditions();
+          completedTransitionDetected = true;
         }
       }
     });
+
+    if (completedTransitionDetected) {
+      const stillHasActiveJobs = jobs.some(isActiveJob);
+      void refetchRenditions().then(() => {
+        if (!stillHasActiveJobs) {
+          setActiveTab((currentTab) => currentTab === 'jobs' ? 'renditions' : currentTab);
+        }
+      });
+    }
 
     prevJobsRef.current = jobs;
   }, [jobsData, videoData, refetchRenditions]);
@@ -197,7 +216,8 @@ export function VideoPage() {
     mutationFn: (data) => processingApi.createJob(projectId, videoId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs', projectId, videoId] });
-      toast.success('¡Procesamiento iniciado! Te notificaremos cuando termine.');
+      showProcessingTab();
+      toast.success('¡Procesamiento iniciado! Puedes seguir el progreso en Jobs.');
     },
     onError: (error) => {
       toast.error(error.response?.data?.message || 'Error al iniciar procesamiento');
@@ -323,252 +343,254 @@ export function VideoPage() {
             )}
 
             {/* Tabs */}
-            <Tabs defaultValue="renditions" className="space-y-6">
-              <TabsList className="w-full grid grid-cols-2 h-12 p-1 bg-muted/50">
-                <TabsTrigger value="renditions" className="data-[state=active]:bg-background" data-testid="renditions-tab">
-                  <Smartphone className="mr-2 h-4 w-4" />
-                  Videos procesados ({renditions.length})
-                </TabsTrigger>
-                <TabsTrigger value="jobs" className="data-[state=active]:bg-background" data-testid="jobs-tab">
-                  <Clock className="mr-2 h-4 w-4" />
-                  Jobs {activeJobs.length > 0 && `(${activeJobs.length} activos)`}
-                </TabsTrigger>
-              </TabsList>
+            <div ref={resultsSectionRef}>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <TabsList className="w-full grid grid-cols-2 h-12 p-1 bg-muted/50">
+                  <TabsTrigger value="renditions" className="data-[state=active]:bg-background" data-testid="renditions-tab">
+                    <Smartphone className="mr-2 h-4 w-4" />
+                    Videos procesados ({renditions.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="jobs" className="data-[state=active]:bg-background" data-testid="jobs-tab">
+                    <Clock className="mr-2 h-4 w-4" />
+                    Jobs {activeJobs.length > 0 && `(${activeJobs.length} activos)`}
+                  </TabsTrigger>
+                </TabsList>
 
-              {/* Renditions Tab */}
-              <TabsContent value="renditions" className="space-y-4">
-                {renditionsLoading ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                    {[...Array(3)].map((_, i) => (
-                      <Skeleton key={i} className="aspect-[9/16] rounded-xl" />
-                    ))}
-                  </div>
-                ) : renditions.length === 0 ? (
-                  <Card className="text-center py-12 border-dashed border-2">
-                    <CardContent className="space-y-4">
-                      <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 flex items-center justify-center">
-                        <Smartphone className="h-8 w-8 text-purple-500" />
-                      </div>
-                      <div>
-                        <h3 className="font-outfit font-semibold text-lg">No hay videos procesados</h3>
-                        <p className="text-muted-foreground text-sm">
-                          Usa el panel de la derecha para convertir tu video
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                    {renditions.map((rendition) => {
-                      const platformBadge =
-                        platformBadgeStyles[rendition.platform] ?? {
-                          label: rendition.platform,
-                          className: 'bg-muted text-white'
-                        };
+                {/* Renditions Tab */}
+                <TabsContent value="renditions" className="space-y-4">
+                  {renditionsLoading ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                      {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="aspect-[9/16] rounded-xl" />
+                      ))}
+                    </div>
+                  ) : renditions.length === 0 ? (
+                    <Card className="text-center py-12 border-dashed border-2">
+                      <CardContent className="space-y-4">
+                        <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 flex items-center justify-center">
+                          <Smartphone className="h-8 w-8 text-purple-500" />
+                        </div>
+                        <div>
+                          <h3 className="font-outfit font-semibold text-lg">No hay videos procesados</h3>
+                          <p className="text-muted-foreground text-sm">
+                            Usa el panel de la derecha para convertir tu video
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                      {renditions.map((rendition) => {
+                        const platformBadge =
+                          platformBadgeStyles[rendition.platform] ?? {
+                            label: rendition.platform,
+                            className: 'bg-muted text-white'
+                          };
 
-                      const modeLabel = processingModeLabels[rendition.processingMode] ?? rendition.processingMode;
-                      const qualityLabel = qualityLabels[rendition.quality] ?? rendition.quality;
-                      const bgLabel = backgroundLabels[rendition.backgroundMode] ?? rendition.backgroundMode;
+                        const modeLabel = processingModeLabels[rendition.processingMode] ?? rendition.processingMode;
+                        const qualityLabel = qualityLabels[rendition.quality] ?? rendition.quality;
+                        const bgLabel = backgroundLabels[rendition.backgroundMode] ?? rendition.backgroundMode;
 
-                      const PlatformIcon =
-                        rendition.platform === 'tiktok'
-                          ? TikTokIcon
-                          : rendition.platform === 'instagram'
-                            ? InstagramIcon
-                            : YouTubeIcon;
+                        const PlatformIcon =
+                          rendition.platform === 'tiktok'
+                            ? TikTokIcon
+                            : rendition.platform === 'instagram'
+                              ? InstagramIcon
+                              : YouTubeIcon;
 
-                      return (
-                        <Card
-                          key={rendition.id}
-                          className="overflow-hidden border-border/50 group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col"
-                        >
-                          {/* MEDIA */}
-                          <div className="relative aspect-[9/16] bg-black overflow-hidden">
-                            {rendition.thumbnailUrl && (
-                              <img
-                                src={rendition.thumbnailUrl}
-                                alt="thumbnail"
-                                className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-0"
-                              />
-                            )}
+                        return (
+                          <Card
+                            key={rendition.id}
+                            className="overflow-hidden border-border/50 group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col"
+                          >
+                            {/* MEDIA */}
+                            <div className="relative aspect-[9/16] bg-black overflow-hidden">
+                              {rendition.thumbnailUrl && (
+                                <img
+                                  src={rendition.thumbnailUrl}
+                                  alt="thumbnail"
+                                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-0"
+                                />
+                              )}
 
-                            {rendition.previewUrl && (
-                              <video
-                                src={rendition.previewUrl}
-                                muted
-                                loop
-                                playsInline
-                                autoPlay
-                                className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                              />
-                            )}
+                              {rendition.previewUrl && (
+                                <video
+                                  src={rendition.previewUrl}
+                                  muted
+                                  loop
+                                  playsInline
+                                  autoPlay
+                                  className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                                />
+                              )}
 
-                            {/* platform icon */}
-                            <div
-                              className={`absolute top-2 left-2 backdrop-blur rounded-full p-1.5 ${platformBadge.className}`}
-                              title={platformBadge.label}
-                            >
-                              <PlatformIcon className="h-4 w-4 text-white" />
-                            </div>
-
-                            {/* delete */}
-                            <Button
-                              size="icon"
-                              variant="destructive"
-                              className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition"
-                              onClick={() => {
-                                setSelectedRendition(rendition);
-                                setIsDeleteRenditionOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-
-                            {/* open preview */}
-                            <button
-                              type="button"
-                              className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition"
-                              onClick={() => {
-                                setPreviewVideo(video);
-                                setPreviewRendition(rendition);
-                                setIsPreviewOpen(true);
-                              }}
-                            >
-                              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow">
-                                <Play className="h-5 w-5 text-black ml-0.5" />
+                              {/* platform icon */}
+                              <div
+                                className={`absolute top-2 left-2 backdrop-blur rounded-full p-1.5 ${platformBadge.className}`}
+                                title={platformBadge.label}
+                              >
+                                <PlatformIcon className="h-4 w-4 text-white" />
                               </div>
-                            </button>
-                          </div>
 
-                          {/* INFO */}
-                          <CardContent className="p-3 flex flex-col gap-2 flex-1">
-                            <div className="text-sm font-semibold leading-tight">
-                              {modeLabel}
-                            </div>
-
-                            {rendition.segmentDuration && (
-                              <div className="text-xs text-muted-foreground">
-                                {formatDuration(rendition.segmentStart)} → {formatDuration(rendition.segmentStart + rendition.segmentDuration)}
-                              </div>
-                            )}
-
-                            <div className="flex flex-wrap gap-1 text-[11px]">
-                              <Badge variant="outline">{qualityLabel}</Badge>
-                              <Badge variant="outline">{bgLabel}</Badge>
-                            </div>
-
-                            {rendition.createdAt && (
-                              <div className="text-[11px] text-muted-foreground">
-                                {timeAgo(rendition.createdAt)}
-                              </div>
-                            )}
-
-                            {/* ACTIONS */}
-                            <div className="flex gap-2 mt-auto">
+                              {/* delete */}
                               <Button
-                                size="sm"
-                                className="flex-1"
+                                size="icon"
+                                variant="destructive"
+                                className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition"
+                                onClick={() => {
+                                  setSelectedRendition(rendition);
+                                  setIsDeleteRenditionOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+
+                              {/* open preview */}
+                              <button
+                                type="button"
+                                className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition"
                                 onClick={() => {
                                   setPreviewVideo(video);
                                   setPreviewRendition(rendition);
                                   setIsPreviewOpen(true);
                                 }}
                               >
-                                <Eye className="h-3 w-3 mr-1" />
-                                Ver
-                              </Button>
-
-                              {rendition.outputUrl && (
-                                <Button asChild size="sm" variant="secondary">
-                                  <a href={rendition.outputUrl} download>
-                                    <Download className="h-3 w-3" />
-                                  </a>
-                                </Button>
-                              )}
+                                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow">
+                                  <Play className="h-5 w-5 text-black ml-0.5" />
+                                </div>
+                              </button>
                             </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                )}
-              </TabsContent>
 
-              {/* Jobs Tab */}
-              <TabsContent value="jobs" className="space-y-4">
-                {jobsLoading ? (
-                  <div className="space-y-4">
-                    {[...Array(3)].map((_, i) => (
-                      <Skeleton key={i} className="h-20 rounded-xl" />
-                    ))}
-                  </div>
-                ) : jobs.length === 0 ? (
-                  <Card className="text-center py-12 border-dashed border-2">
-                    <CardContent className="space-y-4">
-                      <div className="w-16 h-16 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
-                        <Clock className="h-8 w-8 text-blue-500" />
-                      </div>
-                      <div>
-                        <h3 className="font-outfit font-semibold text-lg">No hay jobs</h3>
-                        <p className="text-muted-foreground text-sm">
-                          Los jobs aparecerán aquí cuando proceses un video
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="space-y-3">
-                    {jobs.map((job) => {
-                      const normalizedStatus = job.status?.toLowerCase();
-                      const status = jobStatusConfig[normalizedStatus] || jobStatusConfig.pending;
-                      const StatusIcon = status.icon;
-
-                      return (
-                        <Card key={job.id || job.jobId} className="border-border/50" data-testid={`job-${job.id || job.jobId}`}>
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-4">
-                                <div className={`p-2 rounded-lg ${status.className}`}>
-                                  <StatusIcon className={`h-5 w-5 ${normalizedStatus === 'processing' ? 'animate-spin' : ''}`} />
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <Badge className={`${status.className} border font-medium`}>
-                                      {status.label}
-                                    </Badge>
-                                    <span className="text-sm font-medium">
-                                      {job.processingMode}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    ID: {(job.id || job.jobId).slice(0, 8)}...
-                                  </p>
-                                </div>
+                            {/* INFO */}
+                            <CardContent className="p-3 flex flex-col gap-2 flex-1">
+                              <div className="text-sm font-semibold leading-tight">
+                                {modeLabel}
                               </div>
-                              {isActiveJob(job) && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => cancelJobMutation.mutate(job.id || job.jobId)}
-                                  disabled={cancelJobMutation.isPending}
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  <XCircle className="mr-2 h-4 w-4" />
-                                  Cancelar
-                                </Button>
+
+                              {rendition.segmentDuration && (
+                                <div className="text-xs text-muted-foreground">
+                                  {formatDuration(rendition.segmentStart)} → {formatDuration(rendition.segmentStart + rendition.segmentDuration)}
+                                </div>
                               )}
-                            </div>
-                            {normalizedStatus === 'processing' && (
-                              <Progress value={job.progress || 50} className="mt-4 h-2" />
-                            )}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
+
+                              <div className="flex flex-wrap gap-1 text-[11px]">
+                                <Badge variant="outline">{qualityLabel}</Badge>
+                                <Badge variant="outline">{bgLabel}</Badge>
+                              </div>
+
+                              {rendition.createdAt && (
+                                <div className="text-[11px] text-muted-foreground">
+                                  {timeAgo(rendition.createdAt)}
+                                </div>
+                              )}
+
+                              {/* ACTIONS */}
+                              <div className="flex gap-2 mt-auto">
+                                <Button
+                                  size="sm"
+                                  className="flex-1"
+                                  onClick={() => {
+                                    setPreviewVideo(video);
+                                    setPreviewRendition(rendition);
+                                    setIsPreviewOpen(true);
+                                  }}
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  Ver
+                                </Button>
+
+                                {rendition.outputUrl && (
+                                  <Button asChild size="sm" variant="secondary">
+                                    <a href={rendition.outputUrl} download>
+                                      <Download className="h-3 w-3" />
+                                    </a>
+                                  </Button>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* Jobs Tab */}
+                <TabsContent value="jobs" className="space-y-4">
+                  {jobsLoading ? (
+                    <div className="space-y-4">
+                      {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="h-20 rounded-xl" />
+                      ))}
+                    </div>
+                  ) : jobs.length === 0 ? (
+                    <Card className="text-center py-12 border-dashed border-2">
+                      <CardContent className="space-y-4">
+                        <div className="w-16 h-16 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
+                          <Clock className="h-8 w-8 text-blue-500" />
+                        </div>
+                        <div>
+                          <h3 className="font-outfit font-semibold text-lg">No hay jobs</h3>
+                          <p className="text-muted-foreground text-sm">
+                            Los jobs aparecerán aquí cuando proceses un video
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-3">
+                      {jobs.map((job) => {
+                        const normalizedStatus = job.status?.toLowerCase();
+                        const status = jobStatusConfig[normalizedStatus] || jobStatusConfig.pending;
+                        const StatusIcon = status.icon;
+
+                        return (
+                          <Card key={job.id || job.jobId} className="border-border/50" data-testid={`job-${job.id || job.jobId}`}>
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                  <div className={`p-2 rounded-lg ${status.className}`}>
+                                    <StatusIcon className={`h-5 w-5 ${normalizedStatus === 'processing' ? 'animate-spin' : ''}`} />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <Badge className={`${status.className} border font-medium`}>
+                                        {status.label}
+                                      </Badge>
+                                      <span className="text-sm font-medium">
+                                        {job.processingMode}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      ID: {(job.id || job.jobId).slice(0, 8)}...
+                                    </p>
+                                  </div>
+                                </div>
+                                {isActiveJob(job) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => cancelJobMutation.mutate(job.id || job.jobId)}
+                                    disabled={cancelJobMutation.isPending}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <XCircle className="mr-2 h-4 w-4" />
+                                    Cancelar
+                                  </Button>
+                                )}
+                              </div>
+                              {normalizedStatus === 'processing' && (
+                                <Progress value={job.progress || 50} className="mt-4 h-2" />
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
 
           {/* Processing Panel - Clean Design */}
