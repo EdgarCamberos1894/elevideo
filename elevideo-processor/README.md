@@ -48,7 +48,7 @@ cp .env.example .env
 | `SPRING_BOOT_PROGRESS_WEBHOOK_URL` | ⚠️ | URL para notificaciones de progreso en tiempo real |
 | `CLOUDINARY_TEMP_DIR` | — | Directorio temporal (default: `/tmp/video_processing`) |
 | `HOST` | — | Host del servidor (default: `0.0.0.0`) |
-| `PORT` | — | Puerto (default: `8000`) |
+| `PORT` | — | Puerto del servidor (default: `8000`) |
 | `RELOAD` | — | Hot reload para desarrollo (default: `true`) |
 | `LOG_LEVEL` | — | Nivel de logging (default: `INFO`) |
 
@@ -176,7 +176,7 @@ main.py
 ├── models/
 │   └── schemas.py             # Modelos Pydantic con discriminated unions
 ├── core/
-│   ├── config.py              # Configuración global mutable por job
+│   ├── config.py              # Presets y configuración runtime aislada por job
 │   ├── auth.py                # Validación JWT HS256
 │   ├── middleware.py          # Request ID, logging, CORS
 │   ├── error_handler.py       # Manejo centralizado de errores y retry
@@ -193,16 +193,16 @@ main.py
 
 ## Parámetros avanzados
 
-El campo `advanced_options` en el request permite ajustar el comportamiento del procesamiento:
+El campo `advanced_options` permite reemplazar únicamente parámetros concretos del preset elegido. Si se omite un campo, el procesador conserva el valor del preset actual.
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `headroom_ratio` | float (0.05–0.40) | Espacio sobre la cabeza en el encuadre |
-| `smoothing_strength` | float (0.50–0.99) | Suavizado del movimiento de cámara |
-| `max_camera_speed` | int (5–100) | Velocidad máxima de desplazamiento en px/frame |
-| `apply_sharpening` | bool | Aplicar filtro de nitidez al video final |
-| `use_rule_of_thirds` | bool | Componer usando la regla de los tercios |
-| `edge_padding` | int (0–50) | Margen mínimo a los bordes en píxeles |
+| `max_camera_speed` | int (10–100) | Velocidad máxima del seguimiento horizontal en px/frame. Solo aplica a `smart_crop`. |
+| `apply_sharpening` | bool | Activa o desactiva el filtro de nitidez del resultado final. Aplica a todos los fondos. |
+| `use_rule_of_thirds` | bool | Compone el rostro usando posiciones inspiradas en la regla de los tercios. Solo aplica a `smart_crop`. |
+| `edge_padding` | int (0–50) | Margen lateral mínimo del recorte inteligente en píxeles. Solo aplica a `smart_crop`. |
+
+Cada job recibe una copia aislada de la configuración runtime, por lo que dos procesamientos simultáneos pueden usar presets u opciones avanzadas diferentes sin compartir estado.
 
 ---
 
