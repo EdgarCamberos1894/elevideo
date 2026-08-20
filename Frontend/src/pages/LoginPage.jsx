@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,9 +8,9 @@ import { useTheme } from '@/context/ThemeContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Film, Loader2, Eye, EyeOff, Moon, Sun, Sparkles, ArrowRight } from 'lucide-react';
+import { Film, Loader2, Eye, EyeOff, Moon, Sun, Sparkles, ArrowRight, MailCheck } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -25,27 +25,40 @@ const demoCredentials = {
 export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [verificationRequired, setVerificationRequired] = useState(false);
   const { login } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const registrationSuccess = location.state?.registrationSuccess === true;
+  const verificationEmail = location.state?.verificationEmail || '';
 
   const form = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: '',
+      email: verificationEmail,
       password: '',
     },
   });
 
   const onSubmit = async (data) => {
     setIsLoading(true);
+    setVerificationRequired(false);
     try {
       await login(data);
       toast.success('¡Bienvenido de vuelta!');
       navigate('/dashboard');
     } catch (error) {
       const message = error.response?.data?.message || 'Error al iniciar sesión';
-      toast.error(message);
+      const isUnverifiedEmail = error.response?.status === 403 && /verificar.*email|email.*verificar/i.test(message);
+
+      if (isUnverifiedEmail) {
+        setVerificationRequired(true);
+        toast.error(`${message} Si no encuentras el correo, revisa Spam o Correo no deseado.`);
+      } else {
+        toast.error(message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -72,8 +85,8 @@ export function LoginPage() {
       </Button>
 
       {/* Content */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-8">
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-10">
+        <div className="w-full max-w-md space-y-6">
           {/* Logo */}
           <div className="text-center space-y-4">
             <div className="inline-flex items-center justify-center">
@@ -93,6 +106,29 @@ export function LoginPage() {
               </p>
             </div>
           </div>
+
+          {(registrationSuccess || verificationRequired) && (
+            <div
+              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm"
+              role="status"
+              data-testid="email-verification-notice"
+            >
+              <div className="flex items-start gap-3">
+                <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-foreground">
+                    {registrationSuccess ? 'Cuenta creada. Verifica tu correo antes de iniciar sesión.' : 'Tu correo aún no está verificado.'}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {verificationEmail
+                      ? <>Enviamos el enlace de verificación a <span className="font-medium text-foreground">{verificationEmail}</span>. </>
+                      : null}
+                    Si no lo encuentras en tu bandeja de entrada, revisa también <strong>Spam</strong> o <strong>Correo no deseado</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Card */}
           <Card className="border-border/50 bg-card/80 backdrop-blur-xl shadow-2xl">
@@ -144,8 +180,8 @@ export function LoginPage() {
                   )}
                 </div>
                 <div className="flex justify-end">
-                  <Link 
-                    to="/forgot-password" 
+                  <Link
+                    to="/forgot-password"
                     className="text-sm text-muted-foreground hover:text-accent transition-colors"
                   >
                     ¿Olvidaste tu contraseña?
