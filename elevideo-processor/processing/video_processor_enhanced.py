@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 _VERTICAL_AR_LOW  = 0.53
 _VERTICAL_AR_HIGH = 0.59
-_TARGET_AR        = 9 / 16
 _FACE_RELIABILITY_THRESHOLD = 0.0
 
 
@@ -34,36 +33,53 @@ def process_video_enhanced(
     height       = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     cap.release()
 
-    logger.info("Procesando | %dx%d | %d frames @ %.2ffps | mode=%s | encoder=%s",
-                width, height, total_frames, fps, config.CONVERSION_MODE["mode"], encoder)
+    logger.info(
+        "Procesando | %dx%d | %d frames @ %.2ffps | mode=%s | encoder=%s",
+        width,
+        height,
+        total_frames,
+        fps,
+        config.CONVERSION_MODE["mode"],
+        encoder,
+    )
 
     output_w = config.CROP_SETTINGS["width"]
     output_h = config.CROP_SETTINGS["height"]
     ar       = width / height if height else 0
 
-    # Los modos full (barras negras / blur) siempre pasan por su pipeline para respetar
-    # el fondo elegido y la nitidez, incluso si el video ya es vertical.
     if config.CONVERSION_MODE["mode"] == "full":
         return _process_full(input_path, config, encoder)
 
-    # Un video ya 9:16 no necesita seguimiento horizontal. Solo se reescala si hace falta.
     if _VERTICAL_AR_LOW <= ar <= _VERTICAL_AR_HIGH:
         if width == output_w and height == output_h and not config.ENCODING_SETTINGS.get("apply_unsharp", False):
-            logger.info("Video ya es vertical con dimensiones exactas — sin reprocesamiento")
+            logger.info("Video ya es vertical con dimensiones exactas - sin reprocesamiento")
             return input_path, _base_metrics(total_frames, reason="already_vertical_exact")
-        logger.info("Video vertical — re-escalando al preset de salida")
+        logger.info("Video vertical - re-escalando al preset de salida")
         return _rescale_vertical(input_path, config, encoder)
 
     source_crop_w, source_crop_h = _calculate_source_crop_size(width, height, output_w, output_h)
     logger.info(
         "Smart crop geométrico | input=%dx%d | source_crop=%dx%d | output=%dx%d",
-        width, height, source_crop_w, source_crop_h, output_w, output_h,
+        width,
+        height,
+        source_crop_w,
+        source_crop_h,
+        output_w,
+        output_h,
     )
 
     return _process_smart_crop(
-        input_path, config, detector, stabilizer,
-        use_multipass, encoder, total_frames, fps,
-        width, source_crop_w, source_crop_h,
+        input_path,
+        config,
+        detector,
+        stabilizer,
+        use_multipass,
+        encoder,
+        total_frames,
+        fps,
+        width,
+        source_crop_w,
+        source_crop_h,
     )
 
 
@@ -82,15 +98,23 @@ def _calculate_source_crop_size(frame_w: int, frame_h: int, output_w: int, outpu
         crop_w = frame_w
         crop_h = int(round(crop_w / target_ar))
 
-    # YUV420 funciona de forma más predecible con dimensiones pares.
     crop_w = max(2, min(frame_w, crop_w - (crop_w % 2)))
     crop_h = max(2, min(frame_h, crop_h - (crop_h % 2)))
     return crop_w, crop_h
 
 
 def _process_smart_crop(
-    input_path, config, detector, stabilizer, use_multipass,
-    encoder, total_frames, fps, frame_width, source_crop_w, source_crop_h,
+    input_path,
+    config,
+    detector,
+    stabilizer,
+    use_multipass,
+    encoder,
+    total_frames,
+    fps,
+    frame_width,
+    source_crop_w,
+    source_crop_h,
 ) -> Tuple[str, dict]:
     from processing.ffmpeg_ultra import crop_video_ultra
 
@@ -103,7 +127,7 @@ def _process_smart_crop(
     quality_metrics  = []
     frame_number     = 0
     frames_processed = 0
-    t0               = time.time()
+    analysis_started = time.time()
 
     cap = cv2.VideoCapture(input_path)
     while True:
@@ -151,18 +175,47 @@ def _process_smart_crop(
     if use_multipass:
         positions = multipass.process()
 
+    analysis_time  = time.time() - analysis_started
     total_analyzed = frames_processed
     faces_detected = len(quality_metrics)
     reliability    = faces_detected / total_analyzed if total_analyzed > 0 else 0.0
 
-    logger.info("Detección | frames_analizados=%d | con_cara=%d | reliability=%.1f%%",
-                total_analyzed, faces_detected, reliability * 100)
+    logger.info(
+        "Detección | frames_analizados=%d | con_cara=%d | reliability=%.1f%% | analysis=%.2fs",
+        total_analyzed,
+        faces_detected,
+        reliability * 100,
+        analysis_time,
+    )
 
     if reliability <= _FACE_RELIABILITY_THRESHOLD or not positions:
-        logger.warning("Sin detecciones de cara o posiciones vacías — cambiando a modo full")
-        return _process_full(input_path, config, encoder)
+        logger.warning("Sin detecciones de cara o posiciones vacías - cambiando a modo full")
+        output_path, metrics = _process_full(input_path, config, encoder)
+        metrics.update({
+            "analysis_time":    analysis_time,
+            "reliability_rate": reliability,
+        })
+        return output_path, metrics
+
+    trajectory_smoothness = _calculate_trajectory_smoothness(positions, frame_width)
+    avg_confidence = float(np.mean([m["confidence"] for m in quality_metrics])) if quality_metrics else 0.0
+    avg_tracker_stability = float(np.mean([m["stability"] for m in quality_metrics])) if quality_metrics else 0.0
+    overall_quality = (
+        avg_confidence * 0.40
+        + reliability * 0.35
+        + trajectory_smoothness * 0.25
+    )
+
+    logger.info(
+        "Calidad tracking | confidence=%.1f%% | detector_stability=%.1f%% | trajectory_smoothness=%.1f%% | overall=%.1f%%",
+        avg_confidence * 100,
+        avg_tracker_stability * 100,
+        trajectory_smoothness * 100,
+        overall_quality * 100,
+    )
 
     output_path = _output_path(input_path, config.CONVERSION_MODE["mode"])
+    encoding_started = time.time()
     success = crop_video_ultra(
         input_path,
         output_path,
@@ -171,26 +224,31 @@ def _process_smart_crop(
         encoder=encoder,
         source_crop_size=(source_crop_w, source_crop_h),
     )
+    encoding_time = time.time() - encoding_started
     if not success:
         raise RuntimeError("Error en el encoding del video")
 
     metrics = {
-        "total_frames":       total_frames,
-        "frames_processed":   frames_processed,
-        "keyframes":          len(positions),
-        "analysis_time":      time.time() - t0,
-        "overall_quality":    1.0,
-        "reliability_rate":   reliability,
-        "source_crop_width":  source_crop_w,
-        "source_crop_height": source_crop_h,
+        "total_frames":               total_frames,
+        "frames_processed":           frames_processed,
+        "keyframes":                  len(positions),
+        "analysis_time":              analysis_time,
+        "encoding_time":              encoding_time,
+        "overall_quality":            overall_quality,
+        "average_face_confidence":    avg_confidence,
+        "detector_stability":         avg_tracker_stability,
+        "trajectory_smoothness":      trajectory_smoothness,
+        "reliability_rate":           reliability,
+        "source_crop_width":          source_crop_w,
+        "source_crop_height":         source_crop_h,
     }
-    if quality_metrics:
-        avg_c = np.mean([m["confidence"] for m in quality_metrics])
-        avg_s = np.mean([m["stability"]  for m in quality_metrics])
-        metrics["overall_quality"] = avg_c * 0.4 + avg_s * 0.3 + reliability * 0.3
 
-    logger.info("Smart crop completado | quality=%.1f%% | time=%.2fs",
-                metrics["overall_quality"] * 100, metrics["analysis_time"])
+    logger.info(
+        "Smart crop completado | quality=%.1f%% | analysis=%.2fs | encoding=%.2fs",
+        metrics["overall_quality"] * 100,
+        analysis_time,
+        encoding_time,
+    )
     return output_path, metrics
 
 
@@ -205,22 +263,23 @@ def _process_full(input_path: str, config, encoder: str) -> Tuple[str, dict]:
     output_w = config.CROP_SETTINGS["width"]
     output_h = config.CROP_SETTINGS["height"]
 
-    # Si ya coincide exactamente y no hay nitidez adicional, no hace falta recodificar.
-    if (
-        width == output_w
-        and height == output_h
-        and not config.ENCODING_SETTINGS.get("apply_unsharp", False)
-    ):
+    if width == output_w and height == output_h and not config.ENCODING_SETTINGS.get("apply_unsharp", False):
         return input_path, _base_metrics(reason="already_exact")
 
     original_mode = config.CONVERSION_MODE.get("mode")
     config.CONVERSION_MODE["mode"] = "full"
     try:
         output = _output_path(input_path, "full")
+        encoding_started = time.time()
         ok = crop_video_ultra(input_path, output, [], config, encoder=encoder)
+        encoding_time = time.time() - encoding_started
         if not ok:
             raise RuntimeError("Error en el encoding del video en modo full")
-        return output, {**_base_metrics(reason="full_mode"), "mode": "full"}
+        return output, {
+            **_base_metrics(reason="full_mode"),
+            "mode": "full",
+            "encoding_time": encoding_time,
+        }
     finally:
         config.CONVERSION_MODE["mode"] = original_mode
 
@@ -248,16 +307,43 @@ def _rescale_vertical(input_path: str, config, encoder: str) -> Tuple[str, dict]
     if encoder == "libx264":
         cmd.extend(["-profile:v", s.get("profile", "high")])
 
-    cmd.extend(["-pix_fmt", "yuv420p", "-movflags", "+faststart", "-c:a", "aac", "-b:a", "128k", output])
+    cmd.extend([
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        output,
+    ])
 
+    encoding_started = time.time()
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         logger.error("Re-scale falló | stderr=%s", (e.stderr or "")[-500:])
         raise RuntimeError("Error al re-escalar el video")
+    encoding_time = time.time() - encoding_started
 
-    logger.info("Video re-escalado | output=%s", output)
-    return output, {**_base_metrics(reason="vertical_rescale"), "mode": "vertical_rescale"}
+    logger.info("Video re-escalado | output=%s | encoding=%.2fs", output, encoding_time)
+    return output, {
+        **_base_metrics(reason="vertical_rescale"),
+        "mode": "vertical_rescale",
+        "encoding_time": encoding_time,
+    }
+
+
+def _calculate_trajectory_smoothness(positions, frame_width: int) -> float:
+    """Mide jitter de la trayectoria sin penalizar desplazamiento lateral legítimo."""
+    if len(positions) < 3:
+        return 1.0
+
+    xs = np.asarray([float(position[1]) for position in positions], dtype=float)
+    second_differences = np.diff(xs, n=2)
+    if second_differences.size == 0:
+        return 1.0
+
+    jitter = float(np.percentile(np.abs(second_differences), 75))
+    tolerance = max(6.0, frame_width * 0.015)
+    return float(np.clip(1.0 - (jitter / tolerance), 0.0, 1.0))
 
 
 def _optimal_horizontal_composition(face: dict, frame_w: int, crop_w: int, config) -> int:
@@ -289,9 +375,9 @@ def _optimal_horizontal_composition(face: dict, frame_w: int, crop_w: int, confi
 
 
 def _output_path(input_path: str, suffix: str) -> str:
-    stem      = Path(input_path).stem
-    ts        = time.strftime("%Y%m%d_%H%M%S")
-    temp_dir  = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "temp")
+    stem = Path(input_path).stem
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    temp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "temp")
     os.makedirs(temp_dir, exist_ok=True)
     return os.path.join(temp_dir, f"{stem}_vertical_{suffix}_{ts}.mp4")
 
@@ -301,7 +387,8 @@ def _base_metrics(total_frames: int = 0, reason: str = "") -> dict:
         "total_frames":     total_frames,
         "frames_processed": 0,
         "keyframes":        0,
-        "analysis_time":    0,
+        "analysis_time":    0.0,
+        "encoding_time":    0.0,
         "overall_quality":  1.0,
         "skipped_reason":   reason,
     }
