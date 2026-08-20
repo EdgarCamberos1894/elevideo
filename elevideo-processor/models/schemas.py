@@ -78,12 +78,26 @@ class ShortManualOptions(BaseModel):
 
 
 class AdvancedOptions(BaseModel):
-    headroom_ratio:     Optional[float] = Field(default=None, ge=0.0, le=0.5)
-    smoothing_strength: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    max_camera_speed:   Optional[int]   = Field(default=None, ge=10, le=100)
-    apply_sharpening:   Optional[bool]  = Field(default=None)
-    use_rule_of_thirds: Optional[bool]  = Field(default=None)
-    edge_padding:       Optional[int]   = Field(default=None, ge=0, le=50)
+    max_camera_speed:   Optional[int]  = Field(
+        default=None,
+        ge=10,
+        le=100,
+        description="Velocidad máxima del seguimiento horizontal en píxeles por frame",
+    )
+    apply_sharpening:   Optional[bool] = Field(
+        default=None,
+        description="Aplica nitidez adicional al resultado final",
+    )
+    use_rule_of_thirds: Optional[bool] = Field(
+        default=None,
+        description="Compone el rostro usando posiciones inspiradas en la regla de los tercios",
+    )
+    edge_padding:       Optional[int]  = Field(
+        default=None,
+        ge=0,
+        le=50,
+        description="Margen lateral mínimo del recorte inteligente en píxeles",
+    )
 
 
 class BaseVideoRequest(BaseModel):
