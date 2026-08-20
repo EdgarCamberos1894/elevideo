@@ -217,7 +217,7 @@ public class PortfolioDemoDataInitializer implements ApplicationRunner {
         job.setPhase("processor_connection");
         job.setElapsedSeconds(8.4);
         job.setMessage("No se pudo completar el procesamiento");
-        job.setErrorMessage("El worker intensivo de video está disponible únicamente en el entorno local");
+        job.setErrorMessage("El procesador no respondió dentro del tiempo esperado");
         job.setCompletedAt(LocalDateTime.now().minusMinutes(6));
         processingJobRepository.save(job);
     }
