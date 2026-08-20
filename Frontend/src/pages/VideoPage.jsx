@@ -6,6 +6,7 @@ import { processingApi } from '@/api/processing';
 import { Layout } from '@/components/Layout';
 import { VideoPreviewModal, TikTokIcon, InstagramIcon, YouTubeIcon } from '@/components/VideoPreviewModal';
 import { ProcessingHelpPopover } from '@/components/ProcessingHelpPopover';
+import { AdvancedProcessingOptions } from '@/components/AdvancedProcessingOptions';
 import { notifyProcessingComplete } from '@/lib/notifications';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -133,8 +134,7 @@ export function VideoPage() {
   const [shortStartTime, setShortStartTime] = useState(0);
   const [shortDuration, setShortDuration] = useState(30);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [headroomRatio, setHeadroomRatio] = useState(0.15);
-  const [smoothingStrength, setSmoothingStrength] = useState(0.75);
+  const [advancedOptions, setAdvancedOptions] = useState({});
   const [activeTab, setActiveTab] = useState('renditions');
 
   const [isDeleteRenditionOpen, setIsDeleteRenditionOpen] = useState(false);
@@ -298,8 +298,8 @@ export function VideoPage() {
     } else if (processingMode === 'short_manual') {
       data.shortOptions = { startTime: shortStartTime, duration: shortDuration };
     }
-    if (showAdvanced) {
-      data.advancedOptions = { headroomRatio, smoothingStrength };
+    if (showAdvanced && Object.keys(advancedOptions).length > 0) {
+      data.advancedOptions = advancedOptions;
     }
     processMutation.mutate(data);
   };
@@ -576,16 +576,10 @@ export function VideoPage() {
                 </div>
 
                 {showAdvanced && (
-                  <div className="space-y-4 p-4 rounded-xl bg-muted/30 border border-dashed border-border">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center"><Label className="text-xs">Espacio superior (headroom)</Label><span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{(headroomRatio * 100).toFixed(0)}%</span></div>
-                      <Slider value={[headroomRatio]} onValueChange={([v]) => setHeadroomRatio(v)} min={0} max={0.3} step={0.05} />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center"><Label className="text-xs">Suavizado de cámara</Label><span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{(smoothingStrength * 100).toFixed(0)}%</span></div>
-                      <Slider value={[smoothingStrength]} onValueChange={([v]) => setSmoothingStrength(v)} min={0} max={1} step={0.1} />
-                    </div>
-                  </div>
+                  <AdvancedProcessingOptions
+                    backgroundMode={backgroundMode}
+                    onChange={setAdvancedOptions}
+                  />
                 )}
 
                 <Button className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all text-base font-semibold rounded-xl" onClick={handleProcess} disabled={processMutation.isPending || ((processingMode === 'short_auto' || processingMode === 'short_manual') && shortModesDisabled)} data-testid="process-video-button">
