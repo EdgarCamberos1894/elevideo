@@ -5,6 +5,7 @@ import com.elevideo.backend.auth.api.dto.*;
 import com.elevideo.backend.auth.internal.event.PasswordResetRequestedEvent;
 import com.elevideo.backend.auth.internal.event.UserRegisteredEvent;
 import com.elevideo.backend.shared.event.DomainEventPublisher;
+import com.elevideo.backend.shared.exception.base.ForbiddenException;
 import com.elevideo.backend.shared.security.CustomUserDetails;
 import com.elevideo.backend.shared.security.JwtService;
 import com.elevideo.backend.shared.security.JwtService.JwtData;
@@ -162,7 +163,7 @@ class AuthServiceImpl implements AuthService {
     // Excepciones internas del módulo auth
     // ----------------------------------------------------------------
 
-    static final class EmailNotVerifiedException extends com.elevideo.backend.shared.exception.base.DomainException {
+    static final class EmailNotVerifiedException extends ForbiddenException {
         EmailNotVerifiedException() {
             super("Debes verificar tu email antes de iniciar sesión.");
         }
