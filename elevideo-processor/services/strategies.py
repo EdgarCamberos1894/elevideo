@@ -36,6 +36,10 @@ class ProcessingStrategy(ABC):
         pass
 
 
+def _use_multipass(config) -> bool:
+    return bool(config.PERFORMANCE_SETTINGS.get("use_multipass", False))
+
+
 class VerticalStrategy(ProcessingStrategy):
 
     @property
@@ -47,10 +51,9 @@ class VerticalStrategy(ProcessingStrategy):
 
         tracker.update_phase(ProcessingPhase.DETECTING_FACES)
 
-        use_multipass = request.quality.value in ("normal", "high")
         output_path, metrics = process_video_enhanced(
             local_input_path, config, detector, stabilizer,
-            use_multipass=use_multipass, encoder=encoder,
+            use_multipass=_use_multipass(config), encoder=encoder,
         )
 
         metrics["segment_start"]    = None
@@ -102,10 +105,9 @@ class ShortAutoStrategy(ProcessingStrategy):
         )
 
         tracker.update_phase(ProcessingPhase.DETECTING_FACES)
-        use_multipass = request.quality.value in ("normal", "high")
         output_path, metrics = process_video_enhanced(
             intermediate_path, config, detector, stabilizer,
-            use_multipass=use_multipass, encoder=encoder,
+            use_multipass=_use_multipass(config), encoder=encoder,
         )
 
         _remove_intermediate(intermediate_path, job_id)
@@ -166,10 +168,9 @@ class ShortManualStrategy(ProcessingStrategy):
         )
 
         tracker.update_phase(ProcessingPhase.DETECTING_FACES)
-        use_multipass = request.quality.value in ("normal", "high")
         output_path, metrics = process_video_enhanced(
             intermediate_path, config, detector, stabilizer,
-            use_multipass=use_multipass, encoder=encoder,
+            use_multipass=_use_multipass(config), encoder=encoder,
         )
 
         _remove_intermediate(intermediate_path, job_id)
