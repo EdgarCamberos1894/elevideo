@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-// Nueva URL del backend
-const API_BASE_URL = 'https://elevideo-ec.onrender.com';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://api.elevideo.cambers.lat';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -26,7 +25,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Solo redirigir al login si el error es 401 Y no es una petición de login/register
+    // Avoid redirecting to login for auth endpoints that return 401.
     if (error.response?.status === 401) {
       const isAuthRequest = error.config?.url?.includes('/auth/');
       if (!isAuthRequest) {
