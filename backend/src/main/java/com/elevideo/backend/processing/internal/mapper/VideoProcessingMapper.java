@@ -1,5 +1,6 @@
 package com.elevideo.backend.processing.internal.mapper;
 
+import com.elevideo.backend.processing.api.dto.AdvancedOptions;
 import com.elevideo.backend.processing.api.dto.VideoProcessRequest;
 import com.elevideo.backend.processing.internal.client.VideoPythonRequest;
 import org.mapstruct.Mapper;
@@ -21,4 +22,6 @@ public interface VideoProcessingMapper {
     @Mapping(target = "startTime", source = "startTime")
     @Mapping(target = "duration",  source = "duration")
     VideoPythonRequest.ShortOptionsDto toShortOptionsDto(VideoProcessRequest.ShortManualOptions options);
+
+    VideoPythonRequest.AdvancedOptionsDto toAdvancedOptionsDto(AdvancedOptions options);
 }
