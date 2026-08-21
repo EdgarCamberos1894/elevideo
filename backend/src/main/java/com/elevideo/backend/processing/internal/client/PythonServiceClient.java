@@ -23,6 +23,9 @@ import java.util.UUID;
 @Component
 public class PythonServiceClient {
 
+    private static final int POST_MAX_ATTEMPTS = 2;
+    private static final long POST_RETRY_DELAY_MS = 350L;
+
     private final JwtService jwtService;
     private final RestClient restClient;
 
@@ -40,19 +43,49 @@ public class PythonServiceClient {
     }
 
     public <T> T post(String path, Object body, Class<T> responseType, UUID userId) {
-        log.debug("POST Python service | path={} | userId={}", path, userId);
-        try {
-            return restClient.post()
-                    .uri(pythonServiceUrl + path)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header("X-Service-Key", serviceApiKey)
-                    .header("Authorization", "Bearer " + serviceToken(userId))
-                    .body(body)
-                    .retrieve()
-                    .body(responseType);
-        } catch (HttpClientErrorException e)  { return handleClient(e, path); }
-        catch (HttpServerErrorException e)    { return handleServer(e, path); }
-        catch (ResourceAccessException e)     { throw unavailable(path, e);   }
+        String idempotencyKey = UUID.randomUUID().toString();
+        log.debug(
+                "POST Python service | path={} | userId={} | idempotencyKey={}",
+                path, userId, idempotencyKey
+        );
+
+        for (int attempt = 1; attempt <= POST_MAX_ATTEMPTS; attempt++) {
+            try {
+                return restClient.post()
+                        .uri(pythonServiceUrl + path)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Service-Key", serviceApiKey)
+                        .header("Authorization", "Bearer " + serviceToken(userId))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .body(body)
+                        .retrieve()
+                        .body(responseType);
+            } catch (HttpClientErrorException e) {
+                return handleClient(e, path);
+            } catch (HttpServerErrorException e) {
+                if (attempt < POST_MAX_ATTEMPTS && isTransientServerError(e)) {
+                    log.warn(
+                            "Fallo transitorio del procesador | path={} | status={} | intento={}/{}; reintentando",
+                            path, e.getStatusCode(), attempt, POST_MAX_ATTEMPTS
+                    );
+                    pauseBeforeRetry(path);
+                    continue;
+                }
+                return handleServer(e, path);
+            } catch (ResourceAccessException e) {
+                if (attempt < POST_MAX_ATTEMPTS) {
+                    log.warn(
+                            "Conexión transitoria al procesador | path={} | intento={}/{} | error={}; reintentando",
+                            path, attempt, POST_MAX_ATTEMPTS, e.getMessage()
+                    );
+                    pauseBeforeRetry(path);
+                    continue;
+                }
+                throw unavailable(path, e);
+            }
+        }
+
+        throw new PythonServiceException("No se pudo iniciar el procesamiento.");
     }
 
     public <T> T get(String path, Class<T> responseType, UUID userId) {
@@ -91,6 +124,21 @@ public class PythonServiceClient {
         return jwtService.generateServiceToken(userId);
     }
 
+    private boolean isTransientServerError(HttpServerErrorException e) {
+        int status = e.getStatusCode().value();
+        return status == 502 || status == 503 || status == 504;
+    }
+
+    private void pauseBeforeRetry(String path) {
+        try {
+            Thread.sleep(POST_RETRY_DELAY_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Reintento interrumpido | path={}", path);
+            throw new PythonServiceException("El intento de procesamiento fue interrumpido.");
+        }
+    }
+
     private <T> T handleClient(HttpClientErrorException e, String path) {
         log.warn("Error cliente Python | path={} | status={}", path, e.getStatusCode());
         if (e.getStatusCode() == HttpStatus.NOT_FOUND)
@@ -99,6 +147,8 @@ public class PythonServiceClient {
             throw new PythonServiceException("Error de configuración interna. Contacta al administrador.");
         if (e.getStatusCode() == HttpStatus.BAD_REQUEST)
             throw new PythonServiceException("Solicitud inválida: " + e.getResponseBodyAsString());
+        if (e.getStatusCode() == HttpStatus.CONFLICT)
+            throw new PythonServiceException("La solicitud de procesamiento entró en conflicto con un intento previo.");
         throw new PythonServiceException("Error al comunicarse con el servicio de procesamiento.");
     }
 
