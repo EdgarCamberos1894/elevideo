@@ -28,7 +28,7 @@ public record VideoProcessRequest(
 
         ShortAutoDurationMode shortAutoDurationMode,
 
-        @Min(5) @Max(60)
+        @Min(5) @Max(180)
         Integer shortAutoDuration,
 
         AdvancedOptions advancedOptions
@@ -40,7 +40,7 @@ public record VideoProcessRequest(
             @NotNull @Min(0)
             Double startTime,
 
-            @NotNull @Min(5) @Max(60)
+            @NotNull @Min(5) @Max(180)
             Integer duration
     ) {}
 }
