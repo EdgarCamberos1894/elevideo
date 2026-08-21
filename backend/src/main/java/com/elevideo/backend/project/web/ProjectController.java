@@ -4,6 +4,7 @@ import com.elevideo.backend.project.api.ProjectService;
 import com.elevideo.backend.project.api.dto.ProjectPageableRequest;
 import com.elevideo.backend.project.api.dto.ProjectRequest;
 import com.elevideo.backend.project.api.dto.ProjectResponse;
+import com.elevideo.backend.project.api.dto.ProjectSummaryResponse;
 import com.elevideo.backend.project.documentation.*;
 import com.elevideo.backend.shared.web.ApiResult;
 import com.elevideo.backend.shared.web.PageResponse;
@@ -39,6 +40,12 @@ public class ProjectController {
         return ResponseEntity.ok(ApiResult.success(response, "Projects retrieved successfully."));
     }
 
+    @GetMapping("/summary")
+    public ResponseEntity<ApiResult<ProjectSummaryResponse>> getSummary() {
+        ProjectSummaryResponse response = projectService.getSummary();
+        return ResponseEntity.ok(ApiResult.success(response, "Project dashboard summary retrieved successfully."));
+    }
+
     @GetProjectByIdEndpointDoc
     @GetMapping("/{projectId}")
     public ResponseEntity<ApiResult<ProjectResponse>> getById(@PathVariable Long projectId) {
@@ -60,4 +67,3 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 }
-
