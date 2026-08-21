@@ -1,9 +1,10 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import Dict
+from threading import Lock
+from typing import Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 
 from models.schemas import (
     VideoProcessRequest,
@@ -26,6 +27,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/video", tags=["Video"])
 
 jobs_db: Dict[str, dict] = {}
+idempotency_jobs: Dict[str, str] = {}
+idempotency_lock = Lock()
 cancellation_manager = get_cancellation_manager()
 
 cloudinary_service: CloudinaryService = None
@@ -59,6 +62,49 @@ def _fail_job(job_id: str, user_message: str) -> None:
         "progress":     0,
         "completed_at": datetime.utcnow(),
     })
+
+
+def _idempotency_scope(user_id: str, key: str) -> str:
+    return f"{user_id}:{key.strip()}"
+
+
+def _created_response(job: dict) -> VideoProcessResponse:
+    return VideoProcessResponse(
+        job_id=job["job_id"],
+        status=job["status"],
+        message=job["message"],
+        processing_mode=job["processing_mode"],
+    )
+
+
+def _new_job_record(
+    job_id: str,
+    token: TokenData,
+    request: VideoProcessRequest,
+    video_info: dict,
+    idempotency_scope: Optional[str],
+) -> dict:
+    return {
+        "job_id":                  job_id,
+        "user_id":                 token.user_id,
+        "status":                  JobStatus.pending,
+        "message":                 "El video está en cola para procesarse",
+        "processing_mode":         request.processing_mode,
+        "progress":                0,
+        "output_url":              None,
+        "thumbnail_url":           None,
+        "preview_url":             None,
+        "quality_score":           None,
+        "error_detail":            None,
+        "segment_start":           None,
+        "segment_duration":        None,
+        "output_duration_seconds": None,
+        "created_at":              datetime.utcnow(),
+        "completed_at":            None,
+        "request":                 request.model_dump(),
+        "video_info":              video_info,
+        "idempotency_scope":       idempotency_scope,
+    }
 
 
 def process_video_task(job_id: str, request: VideoProcessRequest) -> None:
@@ -152,6 +198,7 @@ _ERRORS = {
     summary="Crear job de procesamiento",
     responses={
         400: {"description": "Request inválido"},
+        409: {"description": "Idempotency-Key reutilizada con otro request"},
         **_ERRORS,
     },
     openapi_extra={
@@ -165,6 +212,7 @@ async def process_video(
     request: VideoProcessRequest,
     background_tasks: BackgroundTasks,
     token: TokenData = Depends(require_service_token),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     try:
         video_info = validate_video_request(request)
@@ -174,41 +222,47 @@ async def process_video(
         logger.exception("Error inesperado durante validación")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al validar el request")
 
-    job_id = str(uuid.uuid4())
-    jobs_db[job_id] = {
-        "job_id":                  job_id,
-        "user_id":                 token.user_id,
-        "status":                  JobStatus.pending,
-        "message":                 "El video está en cola para procesarse",
-        "processing_mode":         request.processing_mode,
-        "progress":                0,
-        "output_url":              None,
-        "thumbnail_url":           None,
-        "preview_url":             None,
-        "quality_score":           None,
-        "error_detail":            None,
-        "segment_start":           None,
-        "segment_duration":        None,
-        "output_duration_seconds": None,
-        "created_at":              datetime.utcnow(),
-        "completed_at":            None,
-        "request":                 request.model_dump(),
-        "video_info":              video_info,
-    }
+    request_data = request.model_dump()
+    scope = None
+    if idempotency_key and idempotency_key.strip():
+        scope = _idempotency_scope(str(token.user_id), idempotency_key)
+        with idempotency_lock:
+            existing_job_id = idempotency_jobs.get(scope)
+            existing_job = jobs_db.get(existing_job_id) if existing_job_id else None
+            if existing_job is not None:
+                if existing_job.get("request") != request_data:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="La Idempotency-Key ya fue usada con una solicitud diferente.",
+                    )
+                logger.info(
+                    "Job idempotente reutilizado | job_id=%s | user_id=%s",
+                    existing_job_id,
+                    token.user_id,
+                )
+                return _created_response(existing_job)
+            if existing_job_id:
+                idempotency_jobs.pop(scope, None)
+
+            job_id = str(uuid.uuid4())
+            jobs_db[job_id] = _new_job_record(job_id, token, request, video_info, scope)
+            idempotency_jobs[scope] = job_id
+    else:
+        job_id = str(uuid.uuid4())
+        jobs_db[job_id] = _new_job_record(job_id, token, request, video_info, None)
 
     background_tasks.add_task(process_video_task, job_id, request)
 
     logger.info(
-        "Job creado | job_id=%s | user_id=%s | mode=%s | platform=%s",
-        job_id, token.user_id, request.processing_mode.value, request.platform.value,
+        "Job creado | job_id=%s | user_id=%s | mode=%s | platform=%s | idempotent=%s",
+        job_id,
+        token.user_id,
+        request.processing_mode.value,
+        request.platform.value,
+        bool(scope),
     )
 
-    return VideoProcessResponse(
-        job_id=job_id,
-        status=JobStatus.pending,
-        message="El video está en cola para procesarse",
-        processing_mode=request.processing_mode,
-    )
+    return _created_response(jobs_db[job_id])
 
 
 @router.get(
@@ -338,6 +392,13 @@ async def delete_job(
 ):
     job = jobs_db.get(job_id)
     verify_job_ownership(job, token, job_id)
+
+    scope = job.get("idempotency_scope")
+    if scope:
+        with idempotency_lock:
+            if idempotency_jobs.get(scope) == job_id:
+                idempotency_jobs.pop(scope, None)
+
     del jobs_db[job_id]
     logger.info("Job eliminado | job_id=%s | user_id=%s", job_id, token.user_id)
     return {"message": f"Job {job_id} eliminado exitosamente"}
