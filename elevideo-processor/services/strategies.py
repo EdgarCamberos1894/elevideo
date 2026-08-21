@@ -10,6 +10,12 @@ from models.schemas import (
     ProcessingMode,
     get_platform_short_max_duration,
 )
+from utils.processing_progress_context import bind_progress_tracker
+from utils.progress_aware_detector import (
+    ProgressAwareDetector,
+    expected_selector_samples,
+    expected_tracking_samples_for_video,
+)
 from utils.progress_tracker import ProgressTracker, ProcessingPhase
 
 logger = logging.getLogger(__name__)
@@ -41,6 +47,47 @@ def _use_multipass(config) -> bool:
     return bool(config.PERFORMANCE_SETTINGS.get("use_multipass", False))
 
 
+def _prepare_tracking_detector(detector, tracker, video_path: str, config) -> ProgressAwareDetector:
+    sample_rate = max(1, int(config.PERFORMANCE_SETTINGS.get("sample_rate", 4)))
+    expected = expected_tracking_samples_for_video(video_path, sample_rate)
+    progress_detector = ProgressAwareDetector(detector, tracker)
+    progress_detector.configure(
+        ProcessingPhase.DETECTING_FACES,
+        expected_samples=expected,
+        message="Analizando sujetos y encuadre...",
+        start_fraction=0.02,
+        end_fraction=0.94,
+    )
+    return progress_detector
+
+
+def _cut_progress(tracker, fraction: float) -> None:
+    tracker.update_phase_fraction(
+        fraction,
+        f"Preparando segmento... {int(round(fraction * 100))}%",
+    )
+
+
+def _process_with_progress_context(
+    process_video_enhanced,
+    input_path,
+    config,
+    detector,
+    stabilizer,
+    encoder,
+    tracker,
+):
+    with bind_progress_tracker(tracker):
+        return process_video_enhanced(
+            input_path,
+            config,
+            detector,
+            stabilizer,
+            use_multipass=_use_multipass(config),
+            encoder=encoder,
+        )
+
+
 class VerticalStrategy(ProcessingStrategy):
 
     @property
@@ -50,12 +97,32 @@ class VerticalStrategy(ProcessingStrategy):
     def process(self, local_input_path, request, config, detector, stabilizer, encoder, job_id, tracker):
         from processing.video_processor_enhanced import process_video_enhanced
 
-        tracker.update_phase(ProcessingPhase.DETECTING_FACES)
+        if config.CONVERSION_MODE["mode"] == "smart_crop":
+            tracker.update_phase(ProcessingPhase.ANALYZING)
+            tracker.update_phase_fraction(1.0, "Video listo para analizar")
+            tracker.update_phase(ProcessingPhase.DETECTING_FACES)
+            processing_detector = _prepare_tracking_detector(
+                detector, tracker, local_input_path, config
+            )
+        else:
+            tracker.update_phase(
+                ProcessingPhase.PROCESSING,
+                "Preparando composición vertical...",
+            )
+            processing_detector = detector
 
-        output_path, metrics = process_video_enhanced(
-            local_input_path, config, detector, stabilizer,
-            use_multipass=_use_multipass(config), encoder=encoder,
+        output_path, metrics = _process_with_progress_context(
+            process_video_enhanced,
+            local_input_path,
+            config,
+            processing_detector,
+            stabilizer,
+            encoder,
+            tracker,
         )
+
+        if isinstance(processing_detector, ProgressAwareDetector):
+            processing_detector.complete_phase("Análisis de encuadre completado")
 
         metrics["segment_start"]    = None
         metrics["segment_duration"] = None
@@ -81,6 +148,7 @@ class ShortAutoStrategy(ProcessingStrategy):
         assert isinstance(request, ShortAutoRequest)
 
         tracker.update_phase(ProcessingPhase.SELECTING_SEGMENT)
+        tracker.update_phase_fraction(0.04, "Analizando audio, escenas y actividad...")
         video_duration = SegmentSelector.get_video_duration(local_input_path)
         platform_max_duration = get_platform_short_max_duration(request.platform)
 
@@ -91,15 +159,26 @@ class ShortAutoStrategy(ProcessingStrategy):
             platform=request.platform,
         )
 
+        selector_detector = ProgressAwareDetector(detector, tracker)
+        selector_detector.configure(
+            ProcessingPhase.SELECTING_SEGMENT,
+            expected_samples=expected_selector_samples(video_duration),
+            message="Analizando momentos candidatos...",
+            start_fraction=0.18,
+            end_fraction=0.72,
+        )
+
         start_time, actual_duration, selection_strategy = NaturalSegmentSelector.select_best_segment(
             video_path=local_input_path,
             total_duration=video_duration,
             target_duration=request.short_auto_duration,
             duration_mode=request.short_auto_duration_mode.value,
             max_duration_seconds=platform_max_duration,
-            detector=detector,
+            detector=selector_detector,
             config=config,
         )
+        selector_detector.complete_phase("Mejor inicio y cierre seleccionados")
+
         logger.info(
             "Segmento seleccionado | job_id=%s | start=%.2fs | duration=%ds | duration_mode=%s | platform_max=%ds | strategy=%s",
             job_id,
@@ -116,13 +195,36 @@ class ShortAutoStrategy(ProcessingStrategy):
             start_time=start_time,
             duration=actual_duration,
             job_id=job_id,
+            progress_callback=lambda fraction: _cut_progress(tracker, fraction),
+        )
+        tracker.update_phase(ProcessingPhase.SEGMENT_COMPLETE)
+
+        if config.CONVERSION_MODE["mode"] == "smart_crop":
+            tracker.update_phase(ProcessingPhase.ANALYZING)
+            tracker.update_phase_fraction(1.0, "Segmento listo para analizar")
+            tracker.update_phase(ProcessingPhase.DETECTING_FACES)
+            processing_detector = _prepare_tracking_detector(
+                detector, tracker, intermediate_path, config
+            )
+        else:
+            tracker.update_phase(
+                ProcessingPhase.PROCESSING,
+                "Preparando composición vertical...",
+            )
+            processing_detector = detector
+
+        output_path, metrics = _process_with_progress_context(
+            process_video_enhanced,
+            intermediate_path,
+            config,
+            processing_detector,
+            stabilizer,
+            encoder,
+            tracker,
         )
 
-        tracker.update_phase(ProcessingPhase.DETECTING_FACES)
-        output_path, metrics = process_video_enhanced(
-            intermediate_path, config, detector, stabilizer,
-            use_multipass=_use_multipass(config), encoder=encoder,
-        )
+        if isinstance(processing_detector, ProgressAwareDetector):
+            processing_detector.complete_phase("Análisis de encuadre completado")
 
         _remove_intermediate(intermediate_path, job_id)
 
@@ -172,6 +274,7 @@ class ShortManualStrategy(ProcessingStrategy):
             video_duration=video_duration,
             platform=request.platform,
         )
+        tracker.update_phase_fraction(1.0, "Intervalo manual validado")
 
         tracker.update_phase(ProcessingPhase.CUTTING_SEGMENT)
         intermediate_path = SegmentCutter.cut_segment(
@@ -179,13 +282,36 @@ class ShortManualStrategy(ProcessingStrategy):
             start_time=start_time,
             duration=duration,
             job_id=job_id,
+            progress_callback=lambda fraction: _cut_progress(tracker, fraction),
+        )
+        tracker.update_phase(ProcessingPhase.SEGMENT_COMPLETE)
+
+        if config.CONVERSION_MODE["mode"] == "smart_crop":
+            tracker.update_phase(ProcessingPhase.ANALYZING)
+            tracker.update_phase_fraction(1.0, "Segmento listo para analizar")
+            tracker.update_phase(ProcessingPhase.DETECTING_FACES)
+            processing_detector = _prepare_tracking_detector(
+                detector, tracker, intermediate_path, config
+            )
+        else:
+            tracker.update_phase(
+                ProcessingPhase.PROCESSING,
+                "Preparando composición vertical...",
+            )
+            processing_detector = detector
+
+        output_path, metrics = _process_with_progress_context(
+            process_video_enhanced,
+            intermediate_path,
+            config,
+            processing_detector,
+            stabilizer,
+            encoder,
+            tracker,
         )
 
-        tracker.update_phase(ProcessingPhase.DETECTING_FACES)
-        output_path, metrics = process_video_enhanced(
-            intermediate_path, config, detector, stabilizer,
-            use_multipass=_use_multipass(config), encoder=encoder,
-        )
+        if isinstance(processing_detector, ProgressAwareDetector):
+            processing_detector.complete_phase("Análisis de encuadre completado")
 
         _remove_intermediate(intermediate_path, job_id)
 

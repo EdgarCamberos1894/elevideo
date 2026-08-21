@@ -72,9 +72,20 @@ class CancellableProgressTracker:
         self._manager = manager
         self._job_id  = job_id
 
+    def configure_for_mode(self, processing_mode) -> None:
+        self._tracker.configure_for_mode(processing_mode)
+
     def update_phase(self, phase, message=None, metadata=None) -> None:
         check_cancellation(self._manager, self._job_id)
         self._tracker.update_phase(phase, message, metadata)
+
+    def update_phase_fraction(self, fraction, message=None, metadata=None) -> None:
+        check_cancellation(self._manager, self._job_id)
+        self._tracker.update_phase_fraction(fraction, message, metadata)
+
+    def update_work(self, completed, total, message=None, metadata=None) -> None:
+        check_cancellation(self._manager, self._job_id)
+        self._tracker.update_work(completed, total, message, metadata)
 
     def update_progress(self, percentage, message=None) -> None:
         check_cancellation(self._manager, self._job_id)

@@ -6,6 +6,10 @@ import subprocess
 import tempfile
 from typing import List, Optional, Tuple
 
+from utils.ffmpeg_progress import probe_duration_seconds, run_ffmpeg_with_progress
+from utils.processing_progress_context import get_active_progress_tracker
+from utils.progress_tracker import ProcessingPhase
+
 logger = logging.getLogger(__name__)
 
 
@@ -562,7 +566,23 @@ def _encode(
             settings["crf"],
         )
 
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        tracker = get_active_progress_tracker()
+        duration = probe_duration_seconds(input_path) if tracker else None
+        if tracker:
+            tracker.update_phase(ProcessingPhase.ENCODING)
+
+        run_ffmpeg_with_progress(
+            cmd,
+            duration_seconds=duration,
+            on_progress=(
+                lambda fraction: tracker.update_phase_fraction(
+                    fraction,
+                    f"Generando video final... {int(round(fraction * 100))}%",
+                )
+                if tracker
+                else None
+            ),
+        )
     except subprocess.CalledProcessError as e:
         logger.error(
             "FFmpeg falló | code=%s | diagnostic=%s",
