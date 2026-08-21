@@ -26,12 +26,19 @@ class ErrorCategory:
 def _classify(error: Exception) -> str:
     error_type = type(error).__name__.lower()
     error_msg  = str(error).lower()
+    winerror = getattr(error, "winerror", None)
 
     if isinstance(error, ValidationError):
         return ErrorCategory.VALIDATION
     if isinstance(error, CloudinaryError) or "cloudinary" in error_msg:
         return ErrorCategory.CLOUDINARY
     if isinstance(error, VideoProcessingError):
+        return ErrorCategory.PROCESSING
+    if winerror == 206:
+        # Windows usa WinError 206 cuando CreateProcess recibe una línea de
+        # comandos demasiado larga. No es un problema de almacenamiento.
+        return ErrorCategory.SYSTEM
+    if "ffmpeg" in error_msg or "encoding" in error_msg:
         return ErrorCategory.PROCESSING
     if any(x in error_type for x in ("timeout", "connection", "network")):
         return ErrorCategory.NETWORK
