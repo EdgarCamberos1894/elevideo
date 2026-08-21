@@ -102,8 +102,32 @@ const jobStatusConfig = {
   cancelled: { label: 'Cancelado', icon: XCircle, className: 'bg-gray-500/10 text-gray-600 border-gray-500/20' },
 };
 
+const jobPhaseLabels = {
+  queued: 'Esperando turno',
+  validating: 'Validando solicitud',
+  downloading: 'Descargando video',
+  download_complete: 'Descarga completada',
+  selecting_segment: 'Buscando el mejor momento',
+  cutting_segment: 'Preparando el clip',
+  segment_complete: 'Clip preparado',
+  analyzing: 'Preparando análisis',
+  detecting_faces: 'Analizando sujetos y encuadre',
+  analysis_complete: 'Análisis completado',
+  processing: 'Preparando video vertical',
+  stabilizing: 'Estabilizando encuadre',
+  cropping: 'Aplicando recorte inteligente',
+  encoding: 'Generando video final',
+  encoding_complete: 'Video generado',
+  uploading: 'Subiendo resultado',
+  upload_complete: 'Resultado subido',
+  cleaning_up: 'Finalizando',
+  completed: 'Completado',
+  failed: 'Procesamiento fallido',
+};
+
 const ACTIVE_JOB_STATUSES = new Set(['pending', 'processing']);
 const isActiveJob = (job) => ACTIVE_JOB_STATUSES.has(job.status?.toLowerCase());
+const ACTIVE_JOB_POLL_INTERVAL_MS = 1800;
 const SHORT_MIN_DURATION_SECONDS = 5;
 const SHORT_MAX_DURATION_SECONDS = 180;
 
@@ -143,6 +167,12 @@ function formatDuration(seconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
   return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
+function clampProgress(value) {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
 export function VideoPage() {
@@ -186,7 +216,7 @@ export function VideoPage() {
     queryFn: () => processingApi.getJobs(projectId, videoId, { page: 0, size: 20 }),
     refetchInterval: (query) => {
       const currentJobs = query.state.data?.data?.content || query.state.data?.content || [];
-      return currentJobs.some(isActiveJob) ? 5000 : false;
+      return currentJobs.some(isActiveJob) ? ACTIVE_JOB_POLL_INTERVAL_MS : false;
     },
     refetchIntervalInBackground: false,
   });
@@ -486,20 +516,35 @@ export function VideoPage() {
                         const normalizedStatus = job.status?.toLowerCase();
                         const status = jobStatusConfig[normalizedStatus] || jobStatusConfig.pending;
                         const StatusIcon = status.icon;
+                        const progressValue = clampProgress(job.progress);
+                        const remainingValue = Math.max(0, 100 - progressValue);
+                        const phaseLabel = jobPhaseLabels[job.phase] || (normalizedStatus === 'pending' ? 'Esperando turno' : 'Procesando video');
+                        const modeLabel = processingModeLabels[job.processingMode] ?? job.processingMode;
                         return (
                           <Card key={job.id || job.jobId} className="border-border/50" data-testid={`job-${job.id || job.jobId}`}>
                             <CardContent className="p-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-4 min-w-0">
                                   <div className={`p-2 rounded-lg ${status.className}`}><StatusIcon className={`h-5 w-5 ${normalizedStatus === 'processing' ? 'animate-spin' : ''}`} /></div>
-                                  <div>
-                                    <div className="flex items-center gap-2"><Badge className={`${status.className} border font-medium`}>{status.label}</Badge><span className="text-sm font-medium">{job.processingMode}</span></div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap"><Badge className={`${status.className} border font-medium`}>{status.label}</Badge><span className="text-sm font-medium">{modeLabel}</span></div>
                                     <p className="text-xs text-muted-foreground mt-1">ID: {(job.id || job.jobId).slice(0, 8)}...</p>
                                   </div>
                                 </div>
-                                {isActiveJob(job) && <Button variant="outline" size="sm" onClick={() => cancelJobMutation.mutate(job.id || job.jobId)} disabled={cancelJobMutation.isPending} className="text-destructive hover:text-destructive"><XCircle className="mr-2 h-4 w-4" />Cancelar</Button>}
+                                {isActiveJob(job) && <Button variant="outline" size="sm" onClick={() => cancelJobMutation.mutate(job.id || job.jobId)} disabled={cancelJobMutation.isPending} className="text-destructive hover:text-destructive shrink-0"><XCircle className="mr-2 h-4 w-4" />Cancelar</Button>}
                               </div>
-                              {normalizedStatus === 'processing' && <Progress value={job.progress || 50} className="mt-4 h-2" />}
+                              {normalizedStatus === 'processing' && (
+                                <div className="mt-4 space-y-2.5">
+                                  <div className="flex items-end justify-between gap-4">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium truncate">{phaseLabel}</p>
+                                      <p className="text-[11px] text-muted-foreground">{remainingValue}% restante</p>
+                                    </div>
+                                    <span className="font-outfit text-lg font-semibold tabular-nums">{progressValue}%</span>
+                                  </div>
+                                  <Progress value={progressValue} className="h-2.5" aria-label={`Progreso ${progressValue}%`} />
+                                </div>
+                              )}
                             </CardContent>
                           </Card>
                         );
