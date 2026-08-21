@@ -1,9 +1,22 @@
 from collections import deque
-from typing import Dict
+from threading import local
+from typing import Dict, List
 
 import cv2
 import mediapipe as mp
 import numpy as np
+
+
+_thread_state = local()
+
+
+def get_hybrid_profile() -> List[float]:
+    """Devuelve el perfil de ancho relativo registrado por el job actual."""
+    return list(getattr(_thread_state, "hybrid_profile", []))
+
+
+def clear_hybrid_profile() -> None:
+    _thread_state.hybrid_profile = []
 
 
 class SubjectFramer:
@@ -28,6 +41,8 @@ class SubjectFramer:
         self.pose_attempts = 0
         self.pose_detections = 0
         self._center_history = deque(maxlen=5)
+        self._required_width_ratios: List[float] = []
+        clear_hybrid_profile()
 
     def analyze(self, frame, face: dict) -> Dict[str, float]:
         frame_h, frame_w = frame.shape[:2]
@@ -49,7 +64,9 @@ class SubjectFramer:
         self.pose_attempts += 1
         result = self.pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         if not result.pose_landmarks:
-            return self._smooth_center(subject)
+            subject = self._smooth_center(subject)
+            self._record_required_width(subject, frame_w, frame_h)
+            return subject
 
         visible_x = []
         for landmark_id in self._POSE_LANDMARKS:
@@ -58,7 +75,9 @@ class SubjectFramer:
                 visible_x.append(float(np.clip(landmark.x * frame_w, 0, frame_w)))
 
         if len(visible_x) < 2:
-            return self._smooth_center(subject)
+            subject = self._smooth_center(subject)
+            self._record_required_width(subject, frame_w, frame_h)
+            return subject
 
         torso_left = min(visible_x)
         torso_right = max(visible_x)
@@ -72,15 +91,22 @@ class SubjectFramer:
         subject["pose_detected"] = True
         subject["torso_center_x"] = torso_center
         self.pose_detections += 1
-        return self._smooth_center(subject)
+
+        subject = self._smooth_center(subject)
+        self._record_required_width(subject, frame_w, frame_h)
+        return subject
 
     def get_stats(self) -> dict:
+        ratios = self._required_width_ratios
         return {
             "pose_attempts": self.pose_attempts,
             "pose_detections": self.pose_detections,
+            "hybrid_profile_samples": len(ratios),
+            "max_required_width_ratio": max(ratios) if ratios else 1.0,
         }
 
     def close(self) -> None:
+        _thread_state.hybrid_profile = list(self._required_width_ratios)
         self.pose.close()
 
     def _smooth_center(self, subject: dict) -> dict:
@@ -90,3 +116,28 @@ class SubjectFramer:
             median_center = float(np.median(recent[-3:]))
             subject["center_x"] = subject["center_x"] * 0.70 + median_center * 0.30
         return subject
+
+    def _record_required_width(self, subject: dict, frame_w: int, frame_h: int) -> None:
+        """Registra cuánto ancho necesita el sujeto respecto al crop vertical base."""
+        if frame_w <= 0 or frame_h <= 0:
+            self._required_width_ratios.append(1.0)
+            return
+
+        base_crop_w = min(float(frame_w), float(frame_h) * 9.0 / 16.0)
+        if base_crop_w <= 1.0:
+            self._required_width_ratios.append(1.0)
+            return
+
+        subject_left = float(np.clip(subject.get("left", 0.0), 0, frame_w))
+        subject_right = float(np.clip(subject.get("right", frame_w), 0, frame_w))
+        subject_width = max(1.0, subject_right - subject_left)
+        face_width = float(max(1.0, subject.get("face_width", 1.0)))
+
+        margin = max(
+            face_width * 0.25,
+            base_crop_w * 0.08,
+            subject_width * 0.08,
+        )
+        required_width = min(float(frame_w), subject_width + margin * 2.0)
+        ratio = required_width / base_crop_w
+        self._required_width_ratios.append(float(np.clip(ratio, 0.25, 2.50)))
