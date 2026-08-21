@@ -18,6 +18,8 @@ _AUTO_IDEAL_MAX_SECONDS = 50
 _AUTO_DURATION_STEP_SECONDS = 2
 _APPROX_MIN_TOLERANCE_SECONDS = 3
 _APPROX_MAX_TOLERANCE_SECONDS = 6
+_COARSE_TOP_STARTS_PER_ANCHOR = 4
+_MAX_DISCOVERY_STARTS = 10
 
 # La señal de interés sigue mandando. El cierre natural recibe suficiente peso
 # para poder vencer a una ventana apenas más intensa que termine de forma abrupta.
@@ -140,70 +142,43 @@ class NaturalSegmentSelector:
             )
             return start, duration, f"central_fallback_no_signals_v3_{duration_mode}"
 
-        # Primera pasada: cada duración compite con sus mejores ventanas. Solo
-        # conservamos las tres mejores por duración para evitar inflar memoria.
-        coarse_segments: List[dict] = []
-        for duration in durations:
-            starts = SegmentSelector._generate_candidates(total_duration, duration)
-            if not starts:
-                continue
+        # Discovery eficiente: recorremos todo el video solo con 1-3 duraciones
+        # ancla. Después las duraciones posibles compiten alrededor de las zonas
+        # fuertes descubiertas, evitando multiplicar el costo por ~20 ventanas.
+        discovery_starts = _discover_promising_starts(
+            total_duration=total_duration,
+            durations=durations,
+            target_duration=target_duration,
+            duration_mode=duration_mode,
+            audio_scores=audio_scores,
+            visual_scores=visual_scores,
+            scene_cuts=scene_cuts,
+            face_scores=face_scores,
+            silences=silences,
+        )
 
-            _, _, detail = SegmentSelector._score_candidates(
-                candidates=starts,
-                target_duration=duration,
-                audio_scores=audio_scores,
-                visual_scores=visual_scores,
-                scene_cuts=scene_cuts,
-                face_scores=face_scores,
-                silences=silences,
-                log_top=False,
-            )
-            for entry in sorted(detail, key=lambda item: item["score"], reverse=True)[:3]:
-                coarse_segments.append(
-                    _decorate_segment(
-                        entry=entry,
-                        duration=duration,
-                        target_duration=target_duration,
-                        duration_mode=duration_mode,
-                        scene_cuts=scene_cuts,
-                        silences=silences,
-                        audio_scores=audio_scores,
-                        visual_scores=visual_scores,
-                        total_duration=total_duration,
-                    )
-                )
-
-        if not coarse_segments:
+        if not discovery_starts:
             fallback_duration = _fallback_duration(total_duration, target_duration, duration_mode)
             start, duration = SegmentSelector._central_segment(total_duration, fallback_duration)
             return start, duration, f"central_fallback_v3_{duration_mode}"
 
-        coarse_segments.sort(key=lambda item: item["natural_score"], reverse=True)
-        best = coarse_segments[0]
-
-        # Segunda pasada: refinamos los mejores pares (inicio, duración) a 250ms
-        # y alineamos inicio/fin con cortes y silencios detectados.
-        refined_segments: List[dict] = []
-        seen_pairs = set()
-        for segment in coarse_segments[:8]:
-            duration = segment["duration"]
-            pair = (round(segment["start"], 3), duration)
-            if pair in seen_pairs:
-                continue
-            seen_pairs.add(pair)
-
-            refined_starts = SegmentSelector._refine_candidates(
-                top_starts=[segment["start"]],
+        evaluated_segments: List[dict] = []
+        for duration in durations:
+            candidates = SegmentSelector._refine_candidates(
+                top_starts=discovery_starts,
                 total_duration=total_duration,
                 target_duration=duration,
                 scene_cuts=scene_cuts,
                 silences=silences,
             )
-            if not refined_starts:
-                continue
+            if not candidates:
+                candidates = [
+                    min(max(start, 0.0), max(0.0, total_duration - duration))
+                    for start in discovery_starts
+                ]
 
             _, _, detail = SegmentSelector._score_candidates(
-                candidates=refined_starts,
+                candidates=sorted(set(round(value, 3) for value in candidates)),
                 target_duration=duration,
                 audio_scores=audio_scores,
                 visual_scores=visual_scores,
@@ -213,7 +188,7 @@ class NaturalSegmentSelector:
                 log_top=False,
             )
             for entry in detail:
-                refined_segments.append(
+                evaluated_segments.append(
                     _decorate_segment(
                         entry=entry,
                         duration=duration,
@@ -227,10 +202,12 @@ class NaturalSegmentSelector:
                     )
                 )
 
-        if refined_segments:
-            refined_best = max(refined_segments, key=lambda item: item["natural_score"])
-            if refined_best["natural_score"] >= best["natural_score"]:
-                best = refined_best
+        if not evaluated_segments:
+            fallback_duration = _fallback_duration(total_duration, target_duration, duration_mode)
+            start, duration = SegmentSelector._central_segment(total_duration, fallback_duration)
+            return start, duration, f"central_fallback_v3_{duration_mode}"
+
+        best = max(evaluated_segments, key=lambda item: item["natural_score"])
 
         signal_label = _signal_label(
             has_face_signal=has_face_signal,
@@ -254,6 +231,79 @@ class NaturalSegmentSelector:
         )
 
         return best["start"], best["duration"], strategy
+
+
+def _discover_promising_starts(
+    total_duration: float,
+    durations: List[int],
+    target_duration: Optional[int],
+    duration_mode: str,
+    audio_scores: dict,
+    visual_scores: dict,
+    scene_cuts: List[float],
+    face_scores: dict,
+    silences: Optional[List[Tuple[float, float]]],
+) -> List[float]:
+    anchors = _anchor_durations(
+        durations=durations,
+        target_duration=target_duration,
+        duration_mode=duration_mode,
+    )
+
+    discovered = []
+    for duration in anchors:
+        starts = SegmentSelector._generate_candidates(total_duration, duration)
+        if not starts:
+            continue
+
+        _, _, detail = SegmentSelector._score_candidates(
+            candidates=starts,
+            target_duration=duration,
+            audio_scores=audio_scores,
+            visual_scores=visual_scores,
+            scene_cuts=scene_cuts,
+            face_scores=face_scores,
+            silences=silences,
+            log_top=False,
+        )
+        discovered.extend(
+            sorted(detail, key=lambda item: item["score"], reverse=True)[
+                :_COARSE_TOP_STARTS_PER_ANCHOR
+            ]
+        )
+
+    # Deduplicamos zonas casi iguales para que la segunda etapa explore más
+    # regiones reales del video en vez de diez variantes del mismo segundo.
+    ranked = sorted(discovered, key=lambda item: item["score"], reverse=True)
+    starts: List[float] = []
+    for entry in ranked:
+        start = float(entry["start"])
+        if any(abs(start - existing) < 2.0 for existing in starts):
+            continue
+        starts.append(start)
+        if len(starts) >= _MAX_DISCOVERY_STARTS:
+            break
+
+    return starts
+
+
+def _anchor_durations(
+    durations: List[int],
+    target_duration: Optional[int],
+    duration_mode: str,
+) -> List[int]:
+    if not durations:
+        return []
+    if duration_mode == "exact" or len(durations) == 1:
+        return [durations[0]]
+
+    if duration_mode == "approximate":
+        target = int(target_duration or durations[len(durations) // 2])
+        values = [durations[0], min(durations, key=lambda value: abs(value - target)), durations[-1]]
+        return sorted(set(values))
+
+    preferred = min(durations, key=lambda value: abs(value - 40))
+    return sorted(set([durations[0], preferred, durations[-1]]))
 
 
 def _decorate_segment(
