@@ -42,39 +42,53 @@ def run_ffmpeg_with_progress(
             bufsize=1,
         )
 
-        assert process.stdout is not None
-        for raw_line in process.stdout:
-            line = raw_line.strip()
-            if not line:
-                continue
-            stdout_lines.append(line)
+        try:
+            assert process.stdout is not None
+            for raw_line in process.stdout:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                stdout_lines.append(line)
 
-            key, sep, value = line.partition("=")
-            if not sep:
-                continue
+                key, sep, value = line.partition("=")
+                if not sep:
+                    continue
 
-            fraction = None
-            if key == "out_time_us" and duration_seconds and duration_seconds > 0:
+                fraction = None
+                if key == "out_time_us" and duration_seconds and duration_seconds > 0:
+                    try:
+                        seconds = max(0.0, float(value) / 1_000_000.0)
+                        fraction = seconds / duration_seconds
+                    except (TypeError, ValueError):
+                        fraction = None
+                elif key == "out_time" and duration_seconds and duration_seconds > 0:
+                    seconds = _parse_ffmpeg_time(value)
+                    if seconds is not None:
+                        fraction = seconds / duration_seconds
+                elif key == "progress" and value == "end":
+                    fraction = 1.0
+
+                if fraction is not None and on_progress:
+                    fraction = max(0.0, min(1.0, fraction))
+                    # Evita callbacks excesivos sin sacrificar sensación de fluidez.
+                    if fraction >= 1.0 or fraction - last_fraction >= 0.005:
+                        last_fraction = fraction
+                        on_progress(fraction)
+
+            return_code = process.wait()
+        except BaseException:
+            if process.poll() is None:
+                process.terminate()
                 try:
-                    seconds = max(0.0, float(value) / 1_000_000.0)
-                    fraction = seconds / duration_seconds
-                except (TypeError, ValueError):
-                    fraction = None
-            elif key == "out_time" and duration_seconds and duration_seconds > 0:
-                seconds = _parse_ffmpeg_time(value)
-                if seconds is not None:
-                    fraction = seconds / duration_seconds
-            elif key == "progress" and value == "end":
-                fraction = 1.0
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+            raise
+        finally:
+            if process.stdout is not None:
+                process.stdout.close()
 
-            if fraction is not None and on_progress:
-                fraction = max(0.0, min(1.0, fraction))
-                # Evita callbacks excesivos sin sacrificar sensación de fluidez.
-                if fraction >= 1.0 or fraction - last_fraction >= 0.005:
-                    last_fraction = fraction
-                    on_progress(fraction)
-
-        return_code = process.wait()
         stderr_file.seek(0)
         stderr = stderr_file.read()
 
