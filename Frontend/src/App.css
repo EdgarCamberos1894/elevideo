@@ -281,3 +281,50 @@ video::-webkit-media-controls-panel {
 .dark .bg-yellow-500\/10 {
   background-color: rgba(234, 179, 8, 0.15);
 }
+
+/* Mobile dashboard: keep the summary focused on real account metrics. */
+@media (max-width: 767px) {
+  section[aria-label="Resumen de la cuenta"] {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  section[aria-label="Resumen de la cuenta"] > div:first-child,
+  section[aria-label="Resumen de la cuenta"] > div:nth-child(3) {
+    display: none;
+  }
+
+  section[aria-label="Resumen de la cuenta"] > div:nth-child(2) {
+    margin-top: 0;
+    gap: 0.75rem;
+  }
+
+  section[aria-label="Resumen de la cuenta"] > div:nth-child(2) > div {
+    min-height: 5.5rem;
+    padding: 1rem;
+    border: 1px solid rgba(99, 102, 241, 0.16);
+    background: linear-gradient(145deg, rgba(99, 102, 241, 0.07), rgba(139, 92, 246, 0.035));
+    box-shadow: 0 10px 30px -24px rgba(79, 70, 229, 0.65);
+  }
+
+  .dark section[aria-label="Resumen de la cuenta"] > div:nth-child(2) > div {
+    border-color: rgba(129, 140, 248, 0.2);
+    background: linear-gradient(145deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.07));
+  }
+
+  /* Touch devices do not have hover: keep the per-video actions reachable. */
+  .video-card > .relative > .absolute.top-2.right-2 {
+    opacity: 1;
+    z-index: 20;
+  }
+
+  .video-card > .relative > .absolute.top-2.right-2 button {
+    width: 2.25rem;
+    height: 2.25rem;
+    background: rgba(15, 23, 42, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
