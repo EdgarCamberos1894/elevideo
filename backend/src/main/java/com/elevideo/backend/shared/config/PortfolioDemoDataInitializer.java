@@ -178,9 +178,7 @@ public class PortfolioDemoDataInitializer implements ApplicationRunner {
     }
 
     private void seedCompletedJob(Video video) {
-        if (processingJobRepository.findByJobId("demo-completed-sea-turtle").isPresent()) {
-            return;
-        }
+        replaceDemoJob("demo-completed-sea-turtle");
 
         VideoRendition rendition = new VideoRendition();
         rendition.setOutputUrl(VERTICAL_VIDEO_URL);
@@ -207,9 +205,7 @@ public class PortfolioDemoDataInitializer implements ApplicationRunner {
     }
 
     private void seedFailedJob(Video video) {
-        if (processingJobRepository.findByJobId("demo-failed-local-worker").isPresent()) {
-            return;
-        }
+        replaceDemoJob("demo-failed-local-worker");
 
         ProcessingJob job = baseJob(video, "demo-failed-local-worker");
         job.setStatus(JobStatus.FAILED);
@@ -220,6 +216,11 @@ public class PortfolioDemoDataInitializer implements ApplicationRunner {
         job.setErrorMessage("El procesador no respondió dentro del tiempo esperado");
         job.setCompletedAt(LocalDateTime.now().minusMinutes(6));
         processingJobRepository.save(job);
+    }
+
+    private void replaceDemoJob(String jobId) {
+        processingJobRepository.findByJobId(jobId).ifPresent(processingJobRepository::delete);
+        processingJobRepository.flush();
     }
 
     private ProcessingJob baseJob(Video video, String jobId) {

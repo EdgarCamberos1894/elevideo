@@ -69,11 +69,11 @@ export function ResetPasswordPage() {
             </CardDescription>
           </CardHeader>
           <CardFooter>
-            <Link to="/forgot-password" className="w-full">
-              <Button className="w-full bg-accent hover:bg-accent/90">
+            <Button asChild variant="brand" className="w-full">
+              <Link to="/forgot-password">
                 Solicitar nuevo enlace
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -117,6 +117,8 @@ export function ResetPasswordPage() {
                     size="icon"
                     className="absolute right-0 top-0 h-full px-3"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
+                    title={showPassword ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
@@ -142,7 +144,8 @@ export function ResetPasswordPage() {
             <CardFooter className="flex flex-col gap-4">
               <Button
                 type="submit"
-                className="w-full bg-accent hover:bg-accent/90"
+                variant="brand"
+                className="w-full"
                 disabled={isLoading}
                 data-testid="reset-password-submit-button"
               >
@@ -154,7 +157,8 @@ export function ResetPasswordPage() {
         ) : (
           <CardFooter>
             <Button
-              className="w-full bg-accent hover:bg-accent/90"
+              variant="brand"
+              className="w-full"
               onClick={() => navigate('/login')}
               data-testid="go-to-login-button"
             >

@@ -228,15 +228,11 @@ export function DashboardPage() {
         {projects.map((project, index) => {
           const seed = Number(project.id ?? index);
           return (
-            <Link
+            <Card
               key={project.id}
-              to={`/projects/${project.id}`}
-              className="group block h-full w-full"
+              className="card-3d group relative h-full overflow-hidden border-border/60 bg-card hover:border-indigo-500/40 dark:bg-card/80"
+              data-testid={`project-card-${project.id}`}
             >
-              <Card
-                className="card-3d h-full overflow-hidden border-border/60 bg-card hover:border-indigo-500/40 dark:bg-card/80"
-                data-testid={`project-card-${project.id}`}
-              >
                 <div
                   className="relative h-24 overflow-hidden"
                   style={{
@@ -247,24 +243,26 @@ export function DashboardPage() {
                 >
                   <div className="absolute inset-0 bg-black/10" />
                   <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-card to-transparent dark:from-card/95" />
-                  <div className="absolute right-3 top-3 z-10">
+                  <div className="absolute right-3 top-3 z-20">
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(event) => event.preventDefault()}>
+                      <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 bg-black/30 text-white hover:bg-black/50"
+                          className="h-8 w-8 bg-black/45 text-white hover:bg-black/65"
+                          aria-label={`Acciones de ${project.name}`}
+                          title="Acciones del proyecto"
                           data-testid={`project-menu-${project.id}`}
                         >
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(event) => { event.preventDefault(); openEditDialog(project); }}>
+                        <DropdownMenuItem onClick={() => openEditDialog(project)}>
                           <Pencil className="mr-2 h-4 w-4" />Editar
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={(event) => { event.preventDefault(); openDeleteDialog(project); }}
+                          onClick={() => openDeleteDialog(project)}
                           className="text-destructive focus:text-destructive"
                         >
                           <Trash2 className="mr-2 h-4 w-4" />Eliminar
@@ -281,21 +279,29 @@ export function DashboardPage() {
 
                 <CardHeader className="pt-8">
                   <CardTitle className="flex items-center justify-between font-outfit text-lg text-foreground transition-colors group-hover:text-indigo-500">
-                    <span className="truncate">{project.name}</span>
+                    <Link
+                      to={`/projects/${project.id}`}
+                      className="truncate after:absolute after:inset-0 focus-visible:rounded-sm"
+                    >
+                      {project.name}
+                    </Link>
                     <ArrowRight className="h-4 w-4 flex-shrink-0 -translate-x-2 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
                   </CardTitle>
                   {project.description && <CardDescription className="line-clamp-2">{project.description}</CardDescription>}
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1.5">
                       <Film className="h-4 w-4" />
-                      <span>{project.videoCount || 0} videos</span>
+                      <span>{project.videoCount || 0} video{project.videoCount === 1 ? '' : 's'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4" />
+                      <span>{project.conversionCount || 0} resultado{project.conversionCount === 1 ? '' : 's'}</span>
                     </div>
                   </div>
                 </CardContent>
-              </Card>
-            </Link>
+            </Card>
           );
         })}
       </div>
@@ -348,7 +354,8 @@ export function DashboardPage() {
             <DialogTrigger asChild>
               <Button
                 size="lg"
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg shadow-purple-500/25 transition-all hover:from-blue-600 hover:to-purple-700 hover:shadow-purple-500/40 sm:w-auto"
+                variant="gradient"
+                className="w-full sm:w-auto"
                 data-testid="create-project-button"
               >
                 <Plus className="mr-2 h-5 w-5" />
@@ -390,7 +397,8 @@ export function DashboardPage() {
                 <DialogFooter>
                   <Button
                     type="submit"
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                    variant="brand"
+                    className="w-full"
                     disabled={createMutation.isPending}
                     data-testid="create-project-submit"
                   >
@@ -462,7 +470,7 @@ export function DashboardPage() {
                 </div>
                 <Button
                   size="lg"
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg hover:from-blue-600 hover:to-purple-700"
+                  variant="gradient"
                   onClick={() => setIsCreateOpen(true)}
                 >
                   <Sparkles className="mr-2 h-5 w-5" />
@@ -481,7 +489,7 @@ export function DashboardPage() {
               aria-hidden="true"
             />
 
-            <div className="border-b border-slate-200 bg-gradient-to-br from-white via-white to-indigo-50/45 px-4 py-5 dark:border-slate-800 dark:bg-none dark:bg-slate-900/35 sm:px-6 sm:py-6">
+            <div className="border-b border-slate-200 bg-gradient-to-br from-white via-white to-indigo-50/45 px-4 py-4 dark:border-slate-800 dark:bg-none dark:bg-slate-900/35 sm:px-6 sm:py-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                 <div>
                   <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">
@@ -491,7 +499,7 @@ export function DashboardPage() {
                   <h2 id="projects-library-title" className="font-outfit text-xl font-semibold text-slate-950 dark:text-foreground sm:text-2xl">
                     Biblioteca de proyectos
                   </h2>
-                  <p className="mt-1.5 max-w-2xl text-sm text-slate-600 dark:text-muted-foreground">
+                  <p className="mt-1.5 hidden max-w-2xl text-sm text-slate-600 dark:text-muted-foreground sm:block">
                     Busca, ordena y abre tus proyectos desde esta colección.
                   </p>
                 </div>
@@ -502,7 +510,7 @@ export function DashboardPage() {
                 </span>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/90 p-3 shadow-inner shadow-slate-200/35 dark:border-slate-700/80 dark:bg-slate-950/45 dark:shadow-none sm:p-4">
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/90 p-2.5 shadow-inner shadow-slate-200/35 dark:border-slate-700/80 dark:bg-slate-950/45 dark:shadow-none sm:mt-5 sm:p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="relative w-full sm:max-w-md">
                     <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
@@ -536,7 +544,7 @@ export function DashboardPage() {
                   </Select>
                 </div>
 
-                <div className="mt-3 flex flex-col gap-2 border-t border-slate-200/80 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <div className="mt-3 hidden flex-col gap-2 border-t border-slate-200/80 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-muted-foreground sm:flex sm:flex-row sm:items-center sm:justify-between">
                   <span>
                     {search
                       ? `${totalElements} resultado${totalElements === 1 ? '' : 's'} para “${search}”`
@@ -607,7 +615,7 @@ export function DashboardPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" className="bg-gradient-to-r from-blue-500 to-purple-600" disabled={updateMutation.isPending}>
+                <Button type="submit" variant="brand" disabled={updateMutation.isPending}>
                   {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Guardar cambios
                 </Button>

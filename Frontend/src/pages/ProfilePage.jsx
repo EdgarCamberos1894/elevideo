@@ -147,7 +147,7 @@ export function ProfilePage() {
             <CardFooter>
               <Button
                 type="submit"
-                className="bg-accent hover:bg-accent/90"
+                variant="brand"
                 disabled={updateProfileMutation.isPending}
                 data-testid="update-profile-button"
               >
@@ -184,6 +184,8 @@ export function ProfilePage() {
                     size="icon"
                     className="absolute right-0 top-0 h-full px-3"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
+                    title={showPassword ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
@@ -226,7 +228,7 @@ export function ProfilePage() {
             <CardFooter>
               <Button
                 type="submit"
-                className="bg-accent hover:bg-accent/90"
+                variant="brand"
                 disabled={changePasswordMutation.isPending}
                 data-testid="change-password-button"
               >

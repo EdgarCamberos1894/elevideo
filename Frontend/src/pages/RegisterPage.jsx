@@ -75,19 +75,14 @@ export function RegisterPage() {
 
   return (
     <div className="min-h-screen auth-bg relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 -left-20 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-full blur-3xl" />
-      </div>
-
       {/* Theme Toggle */}
       <Button
         variant="ghost"
         size="icon"
         className="absolute top-4 right-4 z-50 bg-background/50 backdrop-blur-sm"
         onClick={toggleTheme}
+        aria-label={theme === 'light' ? 'Usar tema oscuro' : 'Usar tema claro'}
+        title={theme === 'light' ? 'Tema oscuro' : 'Tema claro'}
         data-testid="theme-toggle"
       >
         {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5 text-yellow-400" />}
@@ -179,6 +174,8 @@ export function RegisterPage() {
                       size="icon"
                       className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
+                      title={showPassword ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                     </Button>
@@ -218,7 +215,8 @@ export function RegisterPage() {
               <CardFooter className="flex flex-col gap-4 pb-6">
                 <Button
                   type="submit"
-                  className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium shadow-lg shadow-purple-500/25"
+                  variant="gradient"
+                  className="h-12 w-full font-medium"
                   disabled={isLoading}
                   data-testid="register-submit-button"
                 >

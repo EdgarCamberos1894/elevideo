@@ -95,11 +95,19 @@ const platformShortMaxDurations = {
 };
 
 const jobStatusConfig = {
-  pending: { label: 'En cola', icon: Clock, className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' },
-  processing: { label: 'Procesando', icon: RefreshCw, className: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
-  completed: { label: 'Completado', icon: CheckCircle, className: 'bg-green-500/10 text-green-600 border-green-500/20' },
-  failed: { label: 'Error', icon: AlertCircle, className: 'bg-red-500/10 text-red-600 border-red-500/20' },
-  cancelled: { label: 'Cancelado', icon: XCircle, className: 'bg-gray-500/10 text-gray-600 border-gray-500/20' },
+  pending: { label: 'En cola', icon: Clock, className: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900 dark:text-amber-100 dark:border-amber-700' },
+  processing: { label: 'Procesando', icon: RefreshCw, className: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-100 dark:border-blue-700' },
+  completed: { label: 'Completado', icon: CheckCircle, className: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900 dark:text-emerald-100 dark:border-emerald-700' },
+  failed: { label: 'Error', icon: AlertCircle, className: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-100 dark:border-red-700' },
+  cancelled: { label: 'Cancelado', icon: XCircle, className: 'bg-gray-200 text-gray-800 border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600' },
+};
+
+const videoStatusConfig = {
+  UPLOADED: { label: 'Listo', className: 'text-emerald-600 dark:text-emerald-400' },
+  PROCESSING: { label: 'Procesando', className: 'text-blue-600 dark:text-blue-400' },
+  READY: { label: 'Completado', className: 'text-violet-600 dark:text-violet-400' },
+  COMPLETED: { label: 'Completado', className: 'text-violet-600 dark:text-violet-400' },
+  FAILED: { label: 'Error', className: 'text-red-600 dark:text-red-400' },
 };
 
 const jobPhaseLabels = {
@@ -317,7 +325,7 @@ export function VideoPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs', projectId, videoId] });
       showProcessingTab();
-      toast.success('¡Procesamiento iniciado! Puedes seguir el progreso en Jobs.');
+      toast.success('¡Procesamiento iniciado! Puedes seguir el progreso en Procesos.');
     },
     onError: (error) => toast.error(error.response?.data?.message || 'Error al iniciar procesamiento'),
   });
@@ -326,7 +334,7 @@ export function VideoPage() {
     mutationFn: (jobId) => processingApi.cancelJob(projectId, videoId, jobId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs', projectId, videoId] });
-      toast.success('Job cancelado');
+      toast.success('Proceso cancelado');
     },
     onError: (error) => toast.error(error.response?.data?.message || 'Error al cancelar'),
   });
@@ -336,7 +344,7 @@ export function VideoPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['renditions', projectId, videoId] });
       setIsDeleteRenditionOpen(false);
-      toast.success('Rendición eliminada');
+      toast.success('Resultado eliminado');
     },
     onError: (error) => toast.error(error.response?.data?.message || 'Error al eliminar'),
   });
@@ -389,6 +397,7 @@ export function VideoPage() {
   };
 
   const video = videoData?.data || videoData;
+  const videoStatus = videoStatusConfig[video?.status] || videoStatusConfig.UPLOADED;
   const rawJobs = jobsData?.data?.content || jobsData?.content || [];
   const jobs = rawJobs.slice(0, JOBS_VISIBLE_LIMIT);
   const jobsTotal = Number(jobsData?.data?.totalElements ?? jobsData?.totalElements ?? jobs.length);
@@ -434,18 +443,18 @@ export function VideoPage() {
                   { label: 'Duración', value: formatDuration(video.durationInSeconds) },
                   { label: 'Resolución', value: `${video.width}×${video.height}` },
                   { label: 'Formato', value: (video.format || 'MP4').toUpperCase() },
-                  { label: 'Estado', value: video.status, isStatus: true },
+                  { label: 'Estado', value: videoStatus.label, statusClassName: videoStatus.className },
                 ].map((item) => (
                   <div key={item.label} className="stat-card rounded-xl p-3 sm:p-4">
                     <p className="text-xs sm:text-sm text-muted-foreground">{item.label}</p>
-                    <p className={`font-semibold font-outfit text-sm sm:text-base truncate ${item.isStatus ? 'text-green-500' : ''}`}>{item.value}</p>
+                    <p className={`font-semibold font-outfit text-sm sm:text-base truncate ${item.statusClassName || ''}`}>{item.value}</p>
                   </div>
                 ))}
               </div>
             )}
           </section>
 
-          <aside className="order-2 lg:col-start-3 lg:row-start-1 lg:row-span-2">
+          <aside className="order-3 lg:col-start-3 lg:row-start-1 lg:row-span-2">
             <Card className="border-border/50 bg-card dark:bg-card/95 shadow-xl overflow-hidden lg:sticky lg:top-24">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
@@ -617,12 +626,12 @@ export function VideoPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 cursor-pointer hover:bg-muted transition-all" onClick={() => setShowAdvanced(!showAdvanced)}>
+                <div className="flex items-center justify-between rounded-xl bg-muted/50 p-3 transition-all hover:bg-muted">
                   <div className="flex items-center gap-2">
                     <Settings2 className="h-4 w-4 text-muted-foreground" />
-                    <Label className="cursor-pointer text-sm">Opciones avanzadas</Label>
+                    <Label htmlFor="advanced-options" className="cursor-pointer text-sm">Opciones avanzadas</Label>
                   </div>
-                  <Switch checked={showAdvanced} onCheckedChange={setShowAdvanced} data-testid="advanced-options-toggle" />
+                  <Switch id="advanced-options" checked={showAdvanced} onCheckedChange={setShowAdvanced} data-testid="advanced-options-toggle" />
                 </div>
 
                 {showAdvanced && (
@@ -632,7 +641,7 @@ export function VideoPage() {
                   />
                 )}
 
-                <Button className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all text-base font-semibold rounded-xl" onClick={handleProcess} disabled={processMutation.isPending || ((processingMode === 'short_auto' || processingMode === 'short_manual') && shortModesDisabled)} data-testid="process-video-button">
+                <Button variant="gradient" className="h-12 w-full rounded-xl text-base font-semibold" onClick={handleProcess} disabled={processMutation.isPending || ((processingMode === 'short_auto' || processingMode === 'short_manual') && shortModesDisabled)} data-testid="process-video-button">
                   {processMutation.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Sparkles className="mr-2 h-5 w-5" />}
                   Convertir a vertical
                 </Button>
@@ -641,7 +650,7 @@ export function VideoPage() {
             </Card>
           </aside>
 
-          <section ref={resultsSectionRef} className="order-3 min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-2">
+          <section ref={resultsSectionRef} className="order-2 min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-2">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5 sm:space-y-6">
               <TabsList className="w-full grid grid-cols-2 h-12 p-1 bg-muted/50">
                 <TabsTrigger value="renditions" className="data-[state=active]:bg-background min-w-0 px-2 sm:px-3" data-testid="renditions-tab">
@@ -651,7 +660,7 @@ export function VideoPage() {
                 </TabsTrigger>
                 <TabsTrigger value="jobs" className="data-[state=active]:bg-background min-w-0 px-2 sm:px-3" data-testid="jobs-tab">
                   <Clock className="mr-1.5 sm:mr-2 h-4 w-4 shrink-0" />
-                  <span className="truncate">Jobs{activeJobs.length > 0 ? ` · ${activeJobs.length} activo${activeJobs.length === 1 ? '' : 's'}` : ''}</span>
+                  <span className="truncate">Procesos{activeJobs.length > 0 ? ` · ${activeJobs.length} activo${activeJobs.length === 1 ? '' : 's'}` : ''}</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -713,16 +722,12 @@ export function VideoPage() {
 
                             <CardContent className="min-w-0 p-3.5 sm:p-4 flex flex-col gap-3">
                               <div className="space-y-1.5">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                      <span className="font-medium text-foreground/80">{platformBadge.label}</span>
-                                      {index === 0 && <Badge variant="secondary" className="h-5 px-1.5 text-[9px]">Más reciente</Badge>}
-                                    </div>
-                                    <h3 className="font-outfit font-semibold text-base leading-tight mt-1">{modeLabel}</h3>
-                                  </div>
-                                  {rendition.createdAt && <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo(rendition.createdAt)}</span>}
+                                <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                  <span className="font-medium text-foreground/80">{platformBadge.label}</span>
+                                  {index === 0 && <Badge variant="secondary" className="h-5 px-1.5 text-[9px]">Más reciente</Badge>}
                                 </div>
+                                <h3 className="font-outfit text-base font-semibold leading-tight">{modeLabel}</h3>
+                                {rendition.createdAt && <p className="text-[10px] text-muted-foreground">{timeAgo(rendition.createdAt)}</p>}
                                 {hasSegment ? (
                                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <Scissors className="h-3.5 w-3.5" />
@@ -776,7 +781,7 @@ export function VideoPage() {
                   <Card className="text-center py-12 border-dashed border-2">
                     <CardContent className="space-y-4">
                       <div className="w-16 h-16 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center"><Clock className="h-8 w-8 text-blue-500" /></div>
-                      <div><h3 className="font-outfit font-semibold text-lg">No hay jobs</h3><p className="text-muted-foreground text-sm">Los jobs aparecerán aquí cuando proceses un video</p></div>
+                      <div><h3 className="font-outfit font-semibold text-lg">No hay procesos</h3><p className="text-muted-foreground text-sm">Los procesos aparecerán aquí cuando conviertas un video</p></div>
                     </CardContent>
                   </Card>
                 ) : (
@@ -797,7 +802,7 @@ export function VideoPage() {
                                 <div className={`p-2 rounded-lg shrink-0 ${status.className}`}><StatusIcon className={`h-5 w-5 ${normalizedStatus === 'processing' ? 'animate-spin' : ''}`} /></div>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap"><Badge className={`${status.className} border font-medium`}>{status.label}</Badge><span className="text-sm font-medium">{modeLabel}</span></div>
-                                  <p className="text-xs text-muted-foreground mt-1">ID: {(job.id || job.jobId).slice(0, 8)}...</p>
+                                  <p className="text-xs text-muted-foreground mt-1">Proceso {(job.id || job.jobId).slice(0, 8)}...</p>
                                 </div>
                               </div>
                               {isActiveJob(job) && (
@@ -818,12 +823,22 @@ export function VideoPage() {
                                 <Progress value={progressValue} className="h-2.5" aria-label={`Progreso ${progressValue}%`} />
                               </div>
                             )}
+                            {normalizedStatus === 'failed' && (
+                              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900 dark:bg-red-950/40">
+                                <p className="font-medium text-red-800 dark:text-red-200">
+                                  {job.errorDetail || job.errorMessage || job.message || 'No fue posible completar este procesamiento.'}
+                                </p>
+                                <p className="mt-1 text-xs text-red-700 dark:text-red-300">
+                                  Revisa la configuración y vuelve a iniciar la conversión.
+                                </p>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       );
                     })}
                     {jobsTotal > JOBS_VISIBLE_LIMIT && (
-                      <p className="text-center text-xs text-muted-foreground pt-1">Mostrando los {JOBS_VISIBLE_LIMIT} jobs más recientes de {jobsTotal}.</p>
+                      <p className="text-center text-xs text-muted-foreground pt-1">Mostrando los {JOBS_VISIBLE_LIMIT} procesos más recientes de {jobsTotal}.</p>
                     )}
                   </div>
                 )}

@@ -48,22 +48,27 @@ import {
 const statusConfig = {
   UPLOADED: {
     label: 'Listo',
-    className: 'bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400',
+    className: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900 dark:text-emerald-100 dark:border-emerald-700',
     icon: '✓'
   },
   PROCESSING: {
     label: 'Procesando',
-    className: 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400 status-processing',
+    className: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-100 dark:border-blue-700 status-processing',
     icon: '◌'
   },
   READY: {
     label: 'Completado',
-    className: 'bg-purple-500/10 text-purple-600 border-purple-500/20 dark:text-purple-400',
+    className: 'bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900 dark:text-violet-100 dark:border-violet-700',
+    icon: '★'
+  },
+  COMPLETED: {
+    label: 'Completado',
+    className: 'bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900 dark:text-violet-100 dark:border-violet-700',
     icon: '★'
   },
   FAILED: {
     label: 'Error',
-    className: 'bg-red-500/10 text-red-600 border-red-500/20 dark:text-red-400',
+    className: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-100 dark:border-red-700',
     icon: '✕'
   },
 };
@@ -80,6 +85,38 @@ function formatFileSize(bytes) {
   if (!bytes) return '--';
   const mb = bytes / (1024 * 1024);
   return `${mb.toFixed(1)} MB`;
+}
+
+function VideoThumbnail({ video }) {
+  const [isReady, setIsReady] = useState(false);
+  const mediaClassName = `absolute inset-0 h-full w-full object-cover transition-opacity ${isReady ? 'opacity-100' : 'opacity-0'}`;
+
+  return (
+    <>
+      <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+        <Film className="h-12 w-12 text-white/55" />
+      </div>
+      {video.thumbnailUrl ? (
+        <img
+          src={video.thumbnailUrl}
+          alt={`Vista previa de ${video.title}`}
+          className={mediaClassName}
+          onLoad={() => setIsReady(true)}
+          onError={() => setIsReady(false)}
+        />
+      ) : video.videoUrl ? (
+        <video
+          src={video.videoUrl}
+          className={mediaClassName}
+          muted
+          playsInline
+          preload="metadata"
+          onLoadedData={() => setIsReady(true)}
+          aria-label={`Vista previa de ${video.title}`}
+        />
+      ) : null}
+    </>
+  );
 }
 
 export function ProjectPage() {
@@ -193,14 +230,6 @@ export function ProjectPage() {
     if (file) selectVideoFile(file);
   };
 
-  const clearSelectedVideo = (e) => {
-    e?.stopPropagation();
-    setVideoFile(null);
-    setVideoFileError('');
-    setUploadProgress(0);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
   const project = projectData?.data || projectData;
   const videos = videosData?.data?.content || videosData?.content || [];
 
@@ -235,7 +264,7 @@ export function ProjectPage() {
               <DialogTrigger asChild>
                 <Button
                   size="lg"
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-purple-500/25"
+                  variant="gradient"
                   data-testid="upload-video-button"
                 >
                   <UploadCloud className="mr-2 h-5 w-5" />
@@ -264,7 +293,7 @@ export function ProjectPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Archivo de video</Label>
+                      <Label htmlFor="video-file">Archivo de video</Label>
                       <div
                         className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
                           videoFileError
@@ -277,8 +306,18 @@ export function ProjectPage() {
                         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                         onDragLeave={() => setIsDragging(false)}
                         onDrop={handleDrop}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            fileInputRef.current?.click();
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-describedby="video-file-help"
                       >
                         <input
+                          id="video-file"
                           ref={fileInputRef}
                           type="file"
                           accept="video/*"
@@ -293,18 +332,13 @@ export function ProjectPage() {
                             </div>
                             <div>
                               <p className="font-medium truncate max-w-xs mx-auto">{videoFile.name}</p>
-                              <p className="text-sm text-muted-foreground mt-1">
+                              <p id="video-file-help" className="text-sm text-muted-foreground mt-1">
                                 {formatFileSize(videoFile.size)}
                               </p>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={clearSelectedVideo}
-                            >
+                            <span className="inline-flex h-9 items-center rounded-md px-3 text-sm font-medium text-muted-foreground">
                               Cambiar archivo
-                            </Button>
+                            </span>
                           </div>
                         ) : (
                           <div className="space-y-3">
@@ -315,7 +349,7 @@ export function ProjectPage() {
                               <p className="font-medium">
                                 Arrastra tu video aquí o haz clic
                               </p>
-                              <p className="text-sm text-muted-foreground mt-1">
+                              <p id="video-file-help" className="text-sm text-muted-foreground mt-1">
                                 MP4, MOV, AVI, WebM (máx. {MAX_VIDEO_SIZE_MB} MB)
                               </p>
                             </div>
@@ -343,7 +377,8 @@ export function ProjectPage() {
                   <DialogFooter>
                     <Button
                       type="submit"
-                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                      variant="brand"
+                      className="w-full"
                       disabled={!videoFile || !videoTitle || Boolean(videoFileError) || uploadMutation.isPending}
                       data-testid="upload-video-submit"
                     >
@@ -395,7 +430,7 @@ export function ProjectPage() {
                 </div>
                 <Button
                   size="lg"
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg"
+                  variant="gradient"
                   onClick={() => setIsUploadOpen(true)}
                 >
                   <Sparkles className="mr-2 h-5 w-5" />
@@ -417,34 +452,13 @@ export function ProjectPage() {
                 >
                   {/* Thumbnail */}
                   <div className="relative aspect-video bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
-                    {video.thumbnailUrl || video.videoUrl ? (
-                      <>
-                        {video.thumbnailUrl ? (
-                          <img
-                            src={video.thumbnailUrl}
-                            alt={video.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <video
-                            src={video.videoUrl}
-                            className="w-full h-full object-cover"
-                            muted
-                            preload="metadata"
-                          />
-                        )}
-                      </>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500/20 to-purple-500/20">
-                        <Film className="h-12 w-12 text-white/50" />
-                      </div>
-                    )}
+                    <VideoThumbnail video={video} />
 
                     {/* Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100" />
 
                     {/* Play button */}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                    <div className="absolute inset-0 flex items-center justify-center opacity-100 transition-all sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                       <Button
                         size="icon"
                         className="w-14 h-14 rounded-full bg-white/90 hover:bg-white text-black shadow-xl hover:scale-110 transition-transform"
@@ -453,6 +467,8 @@ export function ProjectPage() {
                           setSelectedVideo(video);
                           setIsPreviewOpen(true);
                         }}
+                        aria-label={`Reproducir ${video.title}`}
+                        title="Reproducir video"
                       >
                         <Play className="h-6 w-6 ml-1" fill="currentColor" />
                       </Button>
@@ -473,13 +489,15 @@ export function ProjectPage() {
                     </div>
 
                     {/* Menu */}
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-2 right-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white"
+                            aria-label={`Acciones de ${video.title}`}
+                            title="Acciones del video"
                           >
                             <MoreVertical className="h-4 w-4" />
                           </Button>
@@ -533,18 +551,12 @@ export function ProjectPage() {
                         </span>
                       )}
                     </div>
-                    <Link
-                      to={`/projects/${projectId}/videos/${video.id}`}
-                      className="inline-flex"
-                    >
-                      <Button
-                        size="sm"
-                        className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                      >
+                    <Button asChild size="sm" variant="brand" className="w-full">
+                      <Link to={`/projects/${projectId}/videos/${video.id}`}>
                         <Wand2 className="mr-2 h-4 w-4" />
                         Convertir a vertical
-                      </Button>
-                    </Link>
+                      </Link>
+                    </Button>
                   </CardHeader>
                 </Card>
               );

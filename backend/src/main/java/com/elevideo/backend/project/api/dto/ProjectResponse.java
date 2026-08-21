@@ -7,6 +7,7 @@ public record ProjectResponse(
         String        name,
         String        description,
         long          videoCount,
+        long          conversionCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {}

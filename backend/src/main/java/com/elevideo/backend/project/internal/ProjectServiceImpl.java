@@ -30,7 +30,7 @@ class ProjectServiceImpl implements ProjectService {
         Project project = projectMapper.toEntity(request);
         project.setUserId(userId);
 
-        return projectMapper.toResponse(projectRepository.save(project), 0L);
+        return projectMapper.toResponse(projectRepository.save(project), 0L, 0L);
     }
 
     @Override
@@ -45,7 +45,8 @@ class ProjectServiceImpl implements ProjectService {
 
         return projects.map(project -> projectMapper.toResponse(
                 project,
-                projectRepository.countVideosByProjectId(project.getId())
+                projectRepository.countVideosByProjectId(project.getId()),
+                projectRepository.countRenditionsByProjectId(project.getId())
         ));
     }
 
@@ -65,7 +66,11 @@ class ProjectServiceImpl implements ProjectService {
     public ProjectResponse getById(Long projectId) {
         UUID userId = currentUserProvider.getCurrentUserId();
         Project project = findOwnedProject(projectId, userId);
-        return projectMapper.toResponse(project, projectRepository.countVideosByProjectId(projectId));
+        return projectMapper.toResponse(
+                project,
+                projectRepository.countVideosByProjectId(projectId),
+                projectRepository.countRenditionsByProjectId(projectId)
+        );
     }
 
     @Override
@@ -76,7 +81,11 @@ class ProjectServiceImpl implements ProjectService {
 
         projectMapper.updateEntity(request, project);
         Project saved = projectRepository.save(project);
-        return projectMapper.toResponse(saved, projectRepository.countVideosByProjectId(projectId));
+        return projectMapper.toResponse(
+                saved,
+                projectRepository.countVideosByProjectId(projectId),
+                projectRepository.countRenditionsByProjectId(projectId)
+        );
     }
 
     @Override

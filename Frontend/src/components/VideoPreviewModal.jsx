@@ -49,10 +49,28 @@ const getPlatformLabel = (platform) => {
     case 'instagram':
       return 'Instagram';
     case 'youtube_shorts':
-      return 'YouTube';
+      return 'YouTube Shorts';
     default:
       return platform;
   }
+};
+
+const processingModeLabels = {
+  vertical: 'Video completo',
+  short_auto: 'Short automático',
+  short_manual: 'Short manual',
+};
+
+const qualityLabels = {
+  fast: 'Rápida',
+  normal: 'Normal',
+  high: 'Alta',
+};
+
+const backgroundLabels = {
+  smart_crop: 'Recorte inteligente',
+  blurred: 'Fondo desenfocado',
+  black: 'Barras negras',
 };
 
 export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
@@ -86,11 +104,11 @@ export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
                   {title}
                 </h3>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <Badge className="bg-gradient-to-r from-pink-500 to-purple-500 text-white border-0 text-[10px] px-2 py-0 h-5 capitalize">
-                    {rendition?.platform}
+                  <Badge className="border-0 bg-indigo-600 px-2 py-0 text-[10px] text-white h-5">
+                    {getPlatformLabel(rendition?.platform)}
                   </Badge>
                   <Badge variant="outline" className="border-white/30 text-white/80 text-[10px] px-2 py-0 h-5">
-                    {rendition?.processingMode?.replace('_', ' ')}
+                    {processingModeLabels[rendition?.processingMode] || rendition?.processingMode}
                   </Badge>
                 </div>
               </div>
@@ -98,6 +116,8 @@ export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
                 variant="ghost"
                 size="icon"
                 onClick={onClose}
+                aria-label="Cerrar vista previa"
+                title="Cerrar"
                 className="text-white/70 hover:text-white hover:bg-white/10 rounded-full h-8 w-8 flex-shrink-0"
               >
                 <X className="h-4 w-4" />
@@ -161,7 +181,8 @@ export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
             {rendition?.outputUrl && (
               <Button
                 asChild
-                className="w-52 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white border-0 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all h-9 text-sm"
+                variant="gradient"
+                className="h-9 w-52 text-sm"
               >
                 <a
                   href={rendition.outputUrl}
@@ -183,7 +204,7 @@ export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
 
             {/* Info adicional compacta */}
             <div className="text-[10px] text-white/40 text-center">
-              {rendition?.quality} • {rendition?.backgroundMode?.replace('_', ' ')}
+              {qualityLabels[rendition?.quality] || rendition?.quality} · {backgroundLabels[rendition?.backgroundMode] || rendition?.backgroundMode}
             </div>
           </div>
         ) : (
@@ -198,6 +219,8 @@ export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
                   variant="ghost"
                   size="icon"
                   onClick={onClose}
+                  aria-label="Cerrar vista previa"
+                  title="Cerrar"
                   className="text-white hover:bg-white/20"
                 >
                   <X className="h-5 w-5" />

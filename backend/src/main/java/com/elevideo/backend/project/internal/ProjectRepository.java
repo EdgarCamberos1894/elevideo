@@ -42,6 +42,14 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     long countVideosByProjectId(@Param("projectId") Long projectId);
 
     @Query("""
+            SELECT COUNT(r) FROM VideoRendition r
+            WHERE r.videoId IN (
+                SELECT v.id FROM Video v WHERE v.projectId = :projectId
+            )
+            """)
+    long countRenditionsByProjectId(@Param("projectId") Long projectId);
+
+    @Query("""
             SELECT COUNT(v) FROM Video v
             WHERE v.projectId IN (
                 SELECT p.id FROM Project p WHERE p.userId = :userId

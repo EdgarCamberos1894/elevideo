@@ -13,7 +13,7 @@ interface ProjectMapper {
 
     Project toEntity(ProjectRequest request);
 
-    ProjectResponse toResponse(Project project, long videoCount);
+    ProjectResponse toResponse(Project project, long videoCount, long conversionCount);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void updateEntity(ProjectRequest request, @MappingTarget Project project);
