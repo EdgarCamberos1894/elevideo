@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import subprocess
+import tempfile
 from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -509,42 +510,58 @@ def _encode(
 ) -> bool:
     preset = config.ENCODING_SETTINGS["quality_preset"]
     settings = config.ENCODING_SETTINGS["presets"][preset]
+    filter_script_path = None
 
     cmd = ["ffmpeg", "-y", "-i", input_path]
-    if filter_complex:
-        cmd.extend([
-            "-filter_complex", vf,
-            "-map", "[vout]",
-            "-map", "0:a?",
-        ])
-    else:
-        cmd.extend(["-vf", vf])
-
-    cmd.extend([
-        "-c:v", encoder,
-        "-preset", settings["preset"],
-        "-crf", str(settings["crf"]),
-    ])
-
-    if encoder == "libx264":
-        cmd.extend(["-profile:v", settings.get("profile", "high")])
-
-    cmd.extend([
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        output_path,
-    ])
-
-    logger.info(
-        "Encoding | preset=%s | ffmpeg_preset=%s | crf=%s",
-        preset,
-        settings["preset"],
-        settings["crf"],
-    )
-
     try:
+        if filter_complex:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                suffix=".ffgraph",
+                prefix="elevideo_",
+                delete=False,
+            ) as script:
+                script.write(vf)
+                filter_script_path = script.name
+
+            cmd.extend([
+                "-filter_complex_script", filter_script_path,
+                "-map", "[vout]",
+                "-map", "0:a?",
+            ])
+            logger.debug(
+                "Filter graph externo | chars=%d | path=%s",
+                len(vf),
+                filter_script_path,
+            )
+        else:
+            cmd.extend(["-vf", vf])
+
+        cmd.extend([
+            "-c:v", encoder,
+            "-preset", settings["preset"],
+            "-crf", str(settings["crf"]),
+        ])
+
+        if encoder == "libx264":
+            cmd.extend(["-profile:v", settings.get("profile", "high")])
+
+        cmd.extend([
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            output_path,
+        ])
+
+        logger.info(
+            "Encoding | preset=%s | ffmpeg_preset=%s | crf=%s",
+            preset,
+            settings["preset"],
+            settings["crf"],
+        )
+
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         logger.error(
@@ -553,6 +570,26 @@ def _encode(
             _ffmpeg_error_summary(e.stderr or ""),
         )
         return False
+    except OSError as e:
+        logger.error(
+            "No se pudo iniciar FFmpeg | winerror=%s | errno=%s | error=%s",
+            getattr(e, "winerror", None),
+            getattr(e, "errno", None),
+            e,
+        )
+        return False
+    finally:
+        if filter_script_path:
+            try:
+                os.remove(filter_script_path)
+            except FileNotFoundError:
+                pass
+            except OSError as cleanup_error:
+                logger.warning(
+                    "No se pudo eliminar filter graph temporal | path=%s | error=%s",
+                    filter_script_path,
+                    cleanup_error,
+                )
 
     if os.path.exists(output_path):
         logger.info(
