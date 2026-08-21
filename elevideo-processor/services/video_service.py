@@ -64,6 +64,7 @@ class VideoProcessingService:
         perf              = PerformanceMonitor()
 
         base_tracker = ProgressTracker(job_id, update_callback=self._publish_progress)
+        base_tracker.configure_for_mode(request.processing_mode)
         base_tracker.start()
         tracker = CancellableProgressTracker(base_tracker, self.cancellation_manager, job_id)
 
@@ -77,6 +78,7 @@ class VideoProcessingService:
                 self.cloudinary.delete_local_files(job_id)
                 if local_output_path and os.path.exists(local_output_path):
                     os.remove(local_output_path)
+                tracker.update_phase_fraction(1.0, "Archivos temporales liberados")
             except Exception as e:
                 logger.warning("Error en cleanup | job_id=%s | %s", job_id, e)
 
@@ -90,19 +92,26 @@ class VideoProcessingService:
             )
 
             tracker.update_phase(ProcessingPhase.VALIDATING)
+            tracker.update_phase_fraction(1.0, "Solicitud validada")
 
             tracker.update_phase(ProcessingPhase.DOWNLOADING)
             t_dl = time.time()
             with CancellableOperation(self.cancellation_manager, job_id, "descarga"):
                 with ErrorContext("descarga de video", cleanup=_cleanup, job_id=job_id):
-                    local_input_path = self._download(request.cloudinary_input_url, job_id)
+                    local_input_path = self._download(
+                        request.cloudinary_input_url,
+                        job_id,
+                        progress_callback=lambda fraction: tracker.update_phase_fraction(
+                            fraction,
+                            f"Descargando video... {int(round(fraction * 100))}%",
+                        ),
+                    )
             perf.record_metric("download_time", time.time() - t_dl)
             tracker.update_phase(ProcessingPhase.DOWNLOAD_COMPLETE)
 
             with ErrorContext("configuración", job_id=job_id):
                 runtime_config = self._configure(request)
 
-            tracker.update_phase(ProcessingPhase.ANALYZING)
             pipeline_started = time.time()
             with ErrorContext("procesamiento de video", cleanup=_cleanup, job_id=job_id):
                 strategy   = get_strategy(request.processing_mode)
@@ -140,10 +149,21 @@ class VideoProcessingService:
                 folder = f"processed_{request.platform.value}"
                 if request.processing_mode in (ProcessingMode.short_auto, ProcessingMode.short_manual):
                     folder = f"{folder}/shorts"
-                output_url = self._upload(local_output_path, job_id, folder)
+                output_url = self._upload(
+                    local_output_path,
+                    job_id,
+                    folder,
+                    progress_callback=lambda fraction: tracker.update_phase_fraction(
+                        fraction,
+                        "Preparando y subiendo resultado...",
+                    ),
+                )
             perf.record_metric("upload_time", time.time() - t_up)
             tracker.update_phase(ProcessingPhase.UPLOAD_COMPLETE)
 
+            # Los previews son trabajo real posterior a la subida principal. Se
+            # mantiene el job en 95% hasta que miniatura y preview estén listos,
+            # evitando mostrar 100% antes de terminar realmente.
             preview_started = time.time()
             thumbnail_url, preview_url = self._generate_previews(
                 local_output_path,
@@ -261,12 +281,32 @@ class VideoProcessingService:
             return None, None
 
     @retry(max_attempts=3, initial_delay=2.0)
-    def _download(self, url: str, job_id: str) -> str:
-        return self.cloudinary.download_video(url, job_id)
+    def _download(
+        self,
+        url: str,
+        job_id: str,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> str:
+        return self.cloudinary.download_video(
+            url,
+            job_id,
+            progress_callback=progress_callback,
+        )
 
     @retry(max_attempts=3, initial_delay=2.0)
-    def _upload(self, local_path: str, job_id: str, folder: str) -> str:
-        return self.cloudinary.upload_video(local_path, job_id, folder)
+    def _upload(
+        self,
+        local_path: str,
+        job_id: str,
+        folder: str,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> str:
+        return self.cloudinary.upload_video(
+            local_path,
+            job_id,
+            folder,
+            progress_callback=progress_callback,
+        )
 
     def _configure(self, request: VideoProcessRequest):
         runtime_config = config.create_runtime_config()
