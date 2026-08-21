@@ -7,6 +7,12 @@ export const projectsApi = {
     return response.data;
   },
 
+  // GET /api/v1/projects/summary - Totales del dashboard
+  getSummary: async () => {
+    const response = await apiClient.get('/api/v1/projects/summary');
+    return response.data;
+  },
+
   // GET /api/v1/projects/{projectId} - Obtener proyecto por ID
   getById: async (projectId) => {
     const response = await apiClient.get(`/api/v1/projects/${projectId}`);

@@ -3,6 +3,7 @@ package com.elevideo.backend.project.api;
 import com.elevideo.backend.project.api.dto.ProjectPageableRequest;
 import com.elevideo.backend.project.api.dto.ProjectRequest;
 import com.elevideo.backend.project.api.dto.ProjectResponse;
+import com.elevideo.backend.project.api.dto.ProjectSummaryResponse;
 import org.springframework.data.domain.Page;
 
 import java.util.UUID;
@@ -19,9 +20,14 @@ public interface ProjectService {
     ProjectResponse create(ProjectRequest request);
 
     /**
-     * Retorna los proyectos del usuario autenticado con paginación.
+     * Retorna los proyectos del usuario autenticado con búsqueda, paginación y ordenamiento.
      */
     Page<ProjectResponse> getProjectsByUser(ProjectPageableRequest pageable);
+
+    /**
+     * Retorna los totales agregados necesarios para el dashboard.
+     */
+    ProjectSummaryResponse getSummary();
 
     /**
      * Retorna un proyecto por ID, validando que pertenezca al usuario autenticado.
@@ -42,7 +48,7 @@ public interface ProjectService {
      * Verifica que un proyecto exista y pertenezca al usuario indicado.
      * Usado internamente por el módulo video.
      *
-     * @throws com.elevideo.backend.project.internal.ProjectNotFoundException  si no existe
+     * @throws com.elevideo.backend.project.internal.ProjectNotFoundException si no existe
      * @throws com.elevideo.backend.project.internal.ProjectForbiddenException si no pertenece al usuario
      */
     void assertProjectOwnedByUser(Long projectId, UUID userId);
