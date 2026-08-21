@@ -41,7 +41,7 @@ class ProgressAwareDetector:
         self._end_fraction = max(self._start_fraction, min(1.0, float(end_fraction)))
 
     def complete_phase(self, message: Optional[str] = None) -> None:
-        if self._phase is None:
+        if self._phase is None or self._tracker.current_phase != self._phase:
             return
         self._tracker.update_phase_fraction(1.0, message or self._message)
 
