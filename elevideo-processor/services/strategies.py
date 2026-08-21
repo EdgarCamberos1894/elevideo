@@ -83,6 +83,7 @@ class ShortAutoStrategy(ProcessingStrategy):
 
         ShortOptionsValidator.validate_short_auto(
             target_duration=request.short_auto_duration,
+            duration_mode=request.short_auto_duration_mode,
             video_duration=video_duration,
         )
 
@@ -90,11 +91,18 @@ class ShortAutoStrategy(ProcessingStrategy):
             video_path=local_input_path,
             total_duration=video_duration,
             target_duration=request.short_auto_duration,
+            duration_mode=request.short_auto_duration_mode.value,
             detector=detector,
             config=config,
         )
-        logger.info("Segmento seleccionado | job_id=%s | start=%.2fs | duration=%ds | strategy=%s",
-                    job_id, start_time, actual_duration, selection_strategy)
+        logger.info(
+            "Segmento seleccionado | job_id=%s | start=%.2fs | duration=%ds | duration_mode=%s | strategy=%s",
+            job_id,
+            start_time,
+            actual_duration,
+            request.short_auto_duration_mode.value,
+            selection_strategy,
+        )
 
         tracker.update_phase(ProcessingPhase.CUTTING_SEGMENT)
         intermediate_path = SegmentCutter.cut_segment(
@@ -116,11 +124,18 @@ class ShortAutoStrategy(ProcessingStrategy):
             "segment_start":      start_time,
             "segment_duration":   actual_duration,
             "selection_strategy": selection_strategy,
+            "duration_mode":      request.short_auto_duration_mode.value,
+            "requested_duration": request.short_auto_duration,
             "original_duration":  video_duration,
         })
 
-        logger.info("ShortAutoStrategy completada | job_id=%s | start=%.2fs | quality=%.2f%%",
-                    job_id, start_time, metrics.get("overall_quality", 0) * 100)
+        logger.info(
+            "ShortAutoStrategy completada | job_id=%s | start=%.2fs | duration=%ds | quality=%.2f%%",
+            job_id,
+            start_time,
+            actual_duration,
+            metrics.get("overall_quality", 0) * 100,
+        )
         return output_path, metrics
 
 
