@@ -1,6 +1,8 @@
 import math
 from typing import Optional
 
+import cv2
+
 from utils.progress_tracker import ProcessingPhase
 
 
@@ -64,10 +66,21 @@ class ProgressAwareDetector:
 
 
 def expected_tracking_samples(total_frames: int, sample_rate: int) -> int:
-    """Estimación conservadora de llamadas base al detector durante Smart Crop."""
+    """Estimación de llamadas base al detector durante Smart Crop."""
     if total_frames <= 0:
         return 1
     return max(1, int(math.ceil(total_frames / max(1, sample_rate))))
+
+
+def expected_tracking_samples_for_video(video_path: str, sample_rate: int) -> int:
+    cap = cv2.VideoCapture(video_path)
+    try:
+        if not cap.isOpened():
+            return 1
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        return expected_tracking_samples(total_frames, sample_rate)
+    finally:
+        cap.release()
 
 
 def expected_selector_samples(total_duration: float) -> int:
