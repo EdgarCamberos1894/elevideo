@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.util.Map;
 
 /**
@@ -18,6 +19,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 class CloudinaryStorageAdapter implements VideoStoragePort {
 
+    private static final int UPLOAD_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
+
     private final Cloudinary cloudinary;
 
     @Override
@@ -26,15 +29,21 @@ class CloudinaryStorageAdapter implements VideoStoragePort {
             throw new IllegalArgumentException("El archivo de video está vacío");
         }
 
-        try {
+        try (InputStream inputStream = file.getInputStream()) {
             Map<String, Object> result = cloudinary.uploader().uploadLarge(
-                    file.getBytes(),
+                    inputStream,
                     Map.of(
                             "resource_type", "video",
-                            "folder",        "Elevideo"
+                            "folder",        "Elevideo",
+                            "chunk_size",    UPLOAD_CHUNK_SIZE_BYTES
                     )
             );
-            log.info("☁️ Video subido a Cloudinary. publicId: {}", result.get("public_id"));
+            log.info(
+                    "☁️ Video subido a Cloudinary por streaming. publicId: {} | bytes: {} | chunkSize: {}",
+                    result.get("public_id"),
+                    file.getSize(),
+                    UPLOAD_CHUNK_SIZE_BYTES
+            );
             return toUploadRes(result);
 
         } catch (Exception e) {
