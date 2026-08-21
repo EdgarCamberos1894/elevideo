@@ -49,8 +49,8 @@ import {
 const PROJECTS_PAGE_SIZE = 6;
 
 const SORT_OPTIONS = [
-  { value: 'updatedAt:DESC', label: 'Actividad reciente' },
   { value: 'createdAt:DESC', label: 'Más nuevos' },
+  { value: 'updatedAt:DESC', label: 'Última edición' },
   { value: 'name:ASC', label: 'Nombre A–Z' },
   { value: 'name:DESC', label: 'Nombre Z–A' },
 ];
@@ -59,7 +59,7 @@ function DashboardMetric({ value, label, accent = false, status = false }) {
   return (
     <div className="min-w-0 px-4 py-3 sm:px-5">
       <div className="flex items-center gap-2">
-        {status && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />}
+        {status && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />}
         <p className={`font-outfit text-xl font-semibold leading-none sm:text-2xl ${accent ? 'text-indigo-500' : status ? 'text-emerald-500' : 'text-foreground'}`}>
           {value}
         </p>
@@ -79,7 +79,7 @@ export function DashboardPage() {
   const [page, setPage] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [sortValue, setSortValue] = useState('updatedAt:DESC');
+  const [sortValue, setSortValue] = useState('createdAt:DESC');
   const queryClient = useQueryClient();
 
   const [sortBy, sortDirection] = sortValue.split(':');
