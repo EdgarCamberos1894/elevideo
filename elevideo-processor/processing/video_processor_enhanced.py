@@ -196,7 +196,9 @@ def _process_smart_crop(
                             face_loss_events += 1
                     was_predicted = is_predicted
 
-                    original_critical = is_predicted
+                    # Una predicción no es por sí misma un evento crítico. La
+                    # ventana segura decidirá si realmente hace falta un salto.
+                    original_critical = False
                     if use_multipass:
                         multipass.add_position(ts, desired_x, q)
                         framing_windows.append((
@@ -237,7 +239,15 @@ def _process_smart_crop(
                             comfort_max_x,
                             source_crop_w,
                         )
-                        critical = original_critical or corrected or emergency
+                        protected_x = _limit_camera_motion(
+                            protected_x,
+                            positions,
+                            source_crop_w,
+                            emergency=emergency,
+                        )
+                        # Solo una violación real de la zona segura necesita
+                        # sobrevivir obligatoriamente a la reducción de keyframes.
+                        critical = bool(emergency)
                         positions.append((ts, protected_x, critical))
 
                         if comfort_corrected:
@@ -289,7 +299,7 @@ def _process_smart_crop(
                             max(0, frame_width - source_crop_w),
                             0,
                             max(0, frame_width - source_crop_w),
-                            True,
+                            False,
                         ))
                     else:
                         fallback = positions[-1][1] if positions else center_x
@@ -298,7 +308,14 @@ def _process_smart_crop(
                             if hasattr(stabilizer, "stabilize")
                             else fallback
                         )
-                        positions.append((ts, sx if sx is not None else fallback, True))
+                        fallback_x = sx if sx is not None else fallback
+                        fallback_x = _limit_camera_motion(
+                            fallback_x,
+                            positions,
+                            source_crop_w,
+                            emergency=False,
+                        )
+                        positions.append((ts, fallback_x, False))
 
                 frames_processed += 1
                 next_interval = (
@@ -723,16 +740,63 @@ def _protect_subject_position(
     if position < comfort_min_x:
         gap = comfort_min_x - position
         pressure = min(1.0, gap / max(1.0, crop_w * 0.18))
-        step = min(gap, max(10.0, crop_w * (0.08 + 0.10 * pressure)))
+        step = min(gap, max(6.0, crop_w * (0.025 + 0.035 * pressure)))
         return position + step, True, False, True, pressure
 
     if position > comfort_max_x:
         gap = position - comfort_max_x
         pressure = min(1.0, gap / max(1.0, crop_w * 0.18))
-        step = min(gap, max(10.0, crop_w * (0.08 + 0.10 * pressure)))
+        step = min(gap, max(6.0, crop_w * (0.025 + 0.035 * pressure)))
         return position - step, True, False, True, pressure
 
     return position, False, False, False, 0.0
+
+
+def _limit_camera_motion(
+    target_position: float,
+    history,
+    crop_w: int,
+    emergency: bool = False,
+) -> float:
+    """Limita aceleración y cambios bruscos de dirección salvo en emergencias."""
+    target_position = float(target_position)
+    if emergency or not history:
+        return target_position
+
+    previous = float(history[-1][1])
+    desired_velocity = target_position - previous
+    max_velocity = max(12.0, crop_w * 0.075)
+    desired_velocity = float(np.clip(
+        desired_velocity,
+        -max_velocity,
+        max_velocity,
+    ))
+
+    if len(history) >= 2:
+        previous_velocity = previous - float(history[-2][1])
+        max_acceleration = max(6.0, crop_w * 0.022)
+        limited_velocity = float(np.clip(
+            desired_velocity,
+            previous_velocity - max_acceleration,
+            previous_velocity + max_acceleration,
+        ))
+
+        # En una inversión de dirección es preferible frenar durante una muestra
+        # a continuar alejándose del nuevo objetivo.
+        if (
+            abs(desired_velocity) > 1e-6
+            and np.sign(limited_velocity) != np.sign(desired_velocity)
+        ):
+            limited_velocity = 0.0
+    else:
+        limited_velocity = desired_velocity
+
+    candidate = previous + limited_velocity
+    if target_position > previous:
+        return min(candidate, target_position)
+    if target_position < previous:
+        return max(candidate, target_position)
+    return previous
 
 
 def _position_pressure(
@@ -789,7 +853,13 @@ def _protect_multipass_positions(positions, framing_windows, crop_w: int):
             comfort_max_x,
             crop_w,
         )
-        critical = bool(original_critical or corrected or emergency)
+        protected = _limit_camera_motion(
+            protected,
+            protected_positions,
+            crop_w,
+            emergency=emergency,
+        )
+        critical = bool(emergency)
         protected_positions.append((timestamp, protected, critical))
 
         if comfort_corrected:
