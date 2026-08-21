@@ -22,15 +22,18 @@ def clear_hybrid_profile() -> None:
 class SubjectFramer:
     """Estima un centro horizontal de sujeto combinando rostro y torso."""
 
-    _POSE_LANDMARKS = (
+    _CENTER_LANDMARKS = (
         mp.solutions.pose.PoseLandmark.LEFT_SHOULDER,
         mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER,
+        mp.solutions.pose.PoseLandmark.LEFT_HIP,
+        mp.solutions.pose.PoseLandmark.RIGHT_HIP,
+    )
+    _WIDTH_LANDMARKS = (
+        *_CENTER_LANDMARKS,
         mp.solutions.pose.PoseLandmark.LEFT_ELBOW,
         mp.solutions.pose.PoseLandmark.RIGHT_ELBOW,
         mp.solutions.pose.PoseLandmark.LEFT_WRIST,
         mp.solutions.pose.PoseLandmark.RIGHT_WRIST,
-        mp.solutions.pose.PoseLandmark.LEFT_HIP,
-        mp.solutions.pose.PoseLandmark.RIGHT_HIP,
     )
 
     def __init__(self, min_visibility: float = 0.45):
@@ -59,6 +62,8 @@ class SubjectFramer:
             "center_x": face_center,
             "left": face_left,
             "right": face_right,
+            "hybrid_left": face_left,
+            "hybrid_right": face_right,
             "face_left": face_left,
             "face_right": face_right,
             "face_width": float(max(1, face_w)),
@@ -72,19 +77,16 @@ class SubjectFramer:
             self._record_required_width(subject, frame_w, frame_h)
             return subject
 
-        visible_x = []
-        for landmark_id in self._POSE_LANDMARKS:
-            landmark = result.pose_landmarks.landmark[int(landmark_id)]
-            if landmark.visibility >= self.min_visibility:
-                visible_x.append(float(np.clip(landmark.x * frame_w, 0, frame_w)))
+        center_x = self._visible_x(result, self._CENTER_LANDMARKS, frame_w)
+        width_x = self._visible_x(result, self._WIDTH_LANDMARKS, frame_w)
 
-        if len(visible_x) < 2:
+        if len(center_x) < 2:
             subject = self._smooth_center(subject)
             self._record_required_width(subject, frame_w, frame_h)
             return subject
 
-        torso_left = min(visible_x)
-        torso_right = max(visible_x)
+        torso_left = min(center_x)
+        torso_right = max(center_x)
         torso_width = max(1.0, torso_right - torso_left)
         torso_center = (torso_left + torso_right) / 2.0
         expansion = max(face_w * 0.15, torso_width * 0.18)
@@ -94,8 +96,25 @@ class SubjectFramer:
         subject["center_x"] = face_center * 0.55 + torso_center * 0.45
         subject["pose_detected"] = True
         subject["torso_center_x"] = torso_center
-        self.pose_detections += 1
 
+        # Brazos y manos solo amplían el perfil usado por el zoom-out híbrido.
+        # No alteran el centro ni la ventana normal de Smart Crop.
+        if len(width_x) >= 2:
+            body_left = min(width_x)
+            body_right = max(width_x)
+            body_width = max(1.0, body_right - body_left)
+            hybrid_expansion = max(face_w * 0.15, body_width * 0.10)
+            subject["hybrid_left"] = float(
+                np.clip(min(subject["left"], body_left - hybrid_expansion), 0, frame_w)
+            )
+            subject["hybrid_right"] = float(
+                np.clip(max(subject["right"], body_right + hybrid_expansion), 0, frame_w)
+            )
+        else:
+            subject["hybrid_left"] = subject["left"]
+            subject["hybrid_right"] = subject["right"]
+
+        self.pose_detections += 1
         subject = self._smooth_center(subject)
         self._record_required_width(subject, frame_w, frame_h)
         return subject
@@ -121,6 +140,14 @@ class SubjectFramer:
             subject["center_x"] = subject["center_x"] * 0.70 + median_center * 0.30
         return subject
 
+    def _visible_x(self, result, landmark_ids, frame_w: int) -> List[float]:
+        visible = []
+        for landmark_id in landmark_ids:
+            landmark = result.pose_landmarks.landmark[int(landmark_id)]
+            if landmark.visibility >= self.min_visibility:
+                visible.append(float(np.clip(landmark.x * frame_w, 0, frame_w)))
+        return visible
+
     def _record_required_width(self, subject: dict, frame_w: int, frame_h: int) -> None:
         """Registra cuánto ancho necesita el sujeto respecto al crop vertical base."""
         if frame_w <= 0 or frame_h <= 0:
@@ -132,8 +159,10 @@ class SubjectFramer:
             self._required_width_ratios.append(1.0)
             return
 
-        subject_left = float(np.clip(subject.get("left", 0.0), 0, frame_w))
-        subject_right = float(np.clip(subject.get("right", frame_w), 0, frame_w))
+        subject_left = float(np.clip(subject.get("hybrid_left", subject.get("left", 0.0)), 0, frame_w))
+        subject_right = float(
+            np.clip(subject.get("hybrid_right", subject.get("right", frame_w)), 0, frame_w)
+        )
         subject_width = max(1.0, subject_right - subject_left)
         face_width = float(max(1.0, subject.get("face_width", 1.0)))
 
