@@ -20,10 +20,11 @@ class CloudinaryService:
     def __init__(self, cloud_name: str, api_key: str, api_secret: str, temp_dir: str = "/tmp/video_processing"):
         cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
         self.temp_dir = temp_dir
-        os.makedirs(temp_dir, exist_ok=True)
+        self._ensure_temp_dir()
         logger.info("CloudinaryService inicializado | temp_dir=%s", temp_dir)
 
     def download_video(self, url: str, job_id: str) -> str:
+        self._ensure_temp_dir()
         local_path = os.path.join(self.temp_dir, f"{job_id}_input.mp4")
         try:
             response = requests.get(url, stream=True)
@@ -97,6 +98,10 @@ class CloudinaryService:
             raise Exception(f"No se pudo subir la imagen: {e}") from e
 
     def delete_local_files(self, job_id: str) -> None:
+        if not os.path.isdir(self.temp_dir):
+            logger.debug("Cleanup omitido: temp_dir no existe | job_id=%s | temp_dir=%s", job_id, self.temp_dir)
+            return
+
         deleted = 0
         for filename in os.listdir(self.temp_dir):
             if filename.startswith(job_id) and filename.endswith(".mp4"):
@@ -123,7 +128,11 @@ class CloudinaryService:
             logger.warning("No se pudo obtener info del video | url=%s", cloudinary_url)
             return None
 
+    def _ensure_temp_dir(self) -> None:
+        os.makedirs(self.temp_dir, exist_ok=True)
+
     def _compress(self, input_path: str, target_mb: float, job_id: str, max_attempts: int = 3) -> str:
+        self._ensure_temp_dir()
         original_mb = os.path.getsize(input_path) / (1024 * 1024)
         base_timeout = max(600, int(original_mb * 6))
         crf_values   = [23, 26, 28]
