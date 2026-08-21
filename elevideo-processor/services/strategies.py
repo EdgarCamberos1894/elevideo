@@ -8,6 +8,7 @@ from models.schemas import (
     ShortAutoRequest,
     ShortManualRequest,
     ProcessingMode,
+    get_platform_short_max_duration,
 )
 from utils.progress_tracker import ProgressTracker, ProcessingPhase
 
@@ -81,11 +82,13 @@ class ShortAutoStrategy(ProcessingStrategy):
 
         tracker.update_phase(ProcessingPhase.SELECTING_SEGMENT)
         video_duration = SegmentSelector.get_video_duration(local_input_path)
+        platform_max_duration = get_platform_short_max_duration(request.platform)
 
         ShortOptionsValidator.validate_short_auto(
             target_duration=request.short_auto_duration,
             duration_mode=request.short_auto_duration_mode,
             video_duration=video_duration,
+            platform=request.platform,
         )
 
         start_time, actual_duration, selection_strategy = NaturalSegmentSelector.select_best_segment(
@@ -93,15 +96,17 @@ class ShortAutoStrategy(ProcessingStrategy):
             total_duration=video_duration,
             target_duration=request.short_auto_duration,
             duration_mode=request.short_auto_duration_mode.value,
+            max_duration_seconds=platform_max_duration,
             detector=detector,
             config=config,
         )
         logger.info(
-            "Segmento seleccionado | job_id=%s | start=%.2fs | duration=%ds | duration_mode=%s | strategy=%s",
+            "Segmento seleccionado | job_id=%s | start=%.2fs | duration=%ds | duration_mode=%s | platform_max=%ds | strategy=%s",
             job_id,
             start_time,
             actual_duration,
             request.short_auto_duration_mode.value,
+            platform_max_duration,
             selection_strategy,
         )
 
@@ -127,6 +132,7 @@ class ShortAutoStrategy(ProcessingStrategy):
             "selection_strategy": selection_strategy,
             "duration_mode":      request.short_auto_duration_mode.value,
             "requested_duration": request.short_auto_duration,
+            "platform_max_duration": platform_max_duration,
             "original_duration":  video_duration,
         })
 
@@ -160,20 +166,12 @@ class ShortManualStrategy(ProcessingStrategy):
         tracker.update_phase(ProcessingPhase.SELECTING_SEGMENT)
         video_duration = SegmentSelector.get_video_duration(local_input_path)
 
-        # start_time negativo es error duro; exceso de duración se ajusta con warning
         ShortOptionsValidator.validate_short_manual(
             start_time=start_time,
             duration=duration,
-            video_duration=None,
+            video_duration=video_duration,
+            platform=request.platform,
         )
-
-        available = video_duration - start_time
-        if duration > available:
-            logger.warning(
-                "Duración ajustada | job_id=%s | pedido=%ds | disponible=%.1fs | video=%.1fs",
-                job_id, duration, available, video_duration,
-            )
-            duration = max(int(available), 1)
 
         tracker.update_phase(ProcessingPhase.CUTTING_SEGMENT)
         intermediate_path = SegmentCutter.cut_segment(
