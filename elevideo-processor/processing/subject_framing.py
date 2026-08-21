@@ -25,6 +25,10 @@ class SubjectFramer:
     _POSE_LANDMARKS = (
         mp.solutions.pose.PoseLandmark.LEFT_SHOULDER,
         mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER,
+        mp.solutions.pose.PoseLandmark.LEFT_ELBOW,
+        mp.solutions.pose.PoseLandmark.RIGHT_ELBOW,
+        mp.solutions.pose.PoseLandmark.LEFT_WRIST,
+        mp.solutions.pose.PoseLandmark.RIGHT_WRIST,
         mp.solutions.pose.PoseLandmark.LEFT_HIP,
         mp.solutions.pose.PoseLandmark.RIGHT_HIP,
     )
