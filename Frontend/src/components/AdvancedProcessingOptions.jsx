@@ -52,14 +52,14 @@ export function AdvancedProcessingOptions({ backgroundMode, onChange }) {
               variant="ghost"
               size="sm"
               onClick={resetToPreset}
-              className="h-7 px-2 text-[11px]"
+              className="h-8 px-2 text-xs"
             >
               <RotateCcw className="mr-1 h-3 w-3" />
               Usar preset
             </Button>
           )}
         </div>
-        <p className="text-[10px] leading-relaxed text-muted-foreground">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           Abrir este panel no cambia el procesamiento. Solo los controles que modifiques reemplazan valores del preset actual.
         </p>
       </div>
@@ -70,9 +70,9 @@ export function AdvancedProcessingOptions({ backgroundMode, onChange }) {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <Label className="text-xs">Velocidad de seguimiento</Label>
-                <p className="text-[10px] text-muted-foreground">Menor = movimiento más calmado; mayor = sigue desplazamientos rápidos.</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">Menor = movimiento más calmado; mayor = sigue desplazamientos rápidos.</p>
               </div>
-              <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 {values.maxCameraSpeed} px/frame
               </span>
             </div>
@@ -89,7 +89,7 @@ export function AdvancedProcessingOptions({ backgroundMode, onChange }) {
           <div className="flex items-center justify-between gap-4 rounded-lg border bg-background/50 p-3">
             <div>
               <Label className="text-xs">Regla de tercios</Label>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">Desplaza la composición para evitar centrar siempre el rostro.</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">Desplaza la composición para evitar centrar siempre el rostro.</p>
             </div>
             <Switch
               checked={values.useRuleOfThirds}
@@ -102,9 +102,9 @@ export function AdvancedProcessingOptions({ backgroundMode, onChange }) {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <Label className="text-xs">Margen lateral</Label>
-                <p className="text-[10px] text-muted-foreground">Evita que el recorte se acerque demasiado a los bordes del video.</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">Evita que el recorte se acerque demasiado a los bordes del video.</p>
               </div>
-              <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 {values.edgePadding}px
               </span>
             </div>
@@ -119,7 +119,7 @@ export function AdvancedProcessingOptions({ backgroundMode, onChange }) {
           </div>
         </>
       ) : (
-        <p className="rounded-lg border bg-background/50 p-3 text-[10px] leading-relaxed text-muted-foreground">
+        <p className="rounded-lg border bg-background/50 p-3 text-xs leading-relaxed text-muted-foreground">
           El fondo seleccionado conserva el video completo, por lo que los ajustes de seguimiento facial no aplican.
         </p>
       )}
@@ -127,7 +127,7 @@ export function AdvancedProcessingOptions({ backgroundMode, onChange }) {
       <div className="flex items-center justify-between gap-4 rounded-lg border bg-background/50 p-3">
         <div>
           <Label className="text-xs">Nitidez adicional</Label>
-          <p className="mt-0.5 text-[10px] text-muted-foreground">Aplica un filtro de enfoque al resultado final después de adaptar el video a 9:16.</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">Aplica un filtro de enfoque al resultado final después de adaptar el video a 9:16.</p>
         </div>
         <Switch
           checked={values.applySharpening}

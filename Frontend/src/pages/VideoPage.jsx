@@ -60,7 +60,7 @@ const platformBadgeStyles = {
 const qualityOptions = [
   { value: 'fast', label: 'Rápida', desc: 'Procesa antes y genera un archivo más ligero.' },
   { value: 'normal', label: 'Normal', desc: 'Balance recomendado entre detalle y tiempo.' },
-  { value: 'high', label: 'Alta calidad', desc: 'Más detalle y seguimiento más fino en Smart Crop.' },
+  { value: 'high', label: 'Alta calidad', desc: 'Más detalle y seguimiento más preciso del sujeto.' },
 ];
 
 const backgroundModeOptions = [
@@ -153,7 +153,7 @@ const qualityLabels = {
 };
 
 const backgroundLabels = {
-  smart_crop: 'Recorte IA',
+  smart_crop: 'Recorte inteligente',
   blurred: 'Fondo difuminado',
   black: 'Barras negras',
 };
@@ -352,7 +352,7 @@ export function VideoPage() {
   const handleProcess = () => {
     const isShortMode = processingMode === 'short_auto' || processingMode === 'short_manual';
     if (isShortMode && shortModesDisabled) {
-      toast.error(`El video debe durar al menos ${SHORT_MIN_DURATION_SECONDS} segundos para crear un short.`);
+      toast.error(`El video debe durar al menos ${SHORT_MIN_DURATION_SECONDS} segundos para crear un clip.`);
       return;
     }
     if (
@@ -463,7 +463,9 @@ export function VideoPage() {
                   </div>
                   <div className="min-w-0">
                     <CardTitle className="font-outfit text-lg">Procesar video</CardTitle>
-                    <CardDescription className="text-xs">Configura el resultado de arriba hacia abajo</CardDescription>
+                    <CardDescription className="text-xs leading-relaxed">
+                      Elige qué crear, dónde publicarlo y cómo encuadrarlo.
+                    </CardDescription>
                   </div>
                 </div>
               </CardHeader>
@@ -475,21 +477,25 @@ export function VideoPage() {
                   </div>
                   <div className="grid gap-2">
                     {[
-                      { value: 'vertical', label: 'Video completo', desc: 'Procesa todo el video', icon: '📹' },
-                      { value: 'short_auto', label: 'Short automático', desc: 'Busca el momento con mayor interés', icon: '✨' },
-                      { value: 'short_manual', label: 'Short manual', desc: 'Tú eliges el tramo exacto', icon: '✂️' },
+                      { value: 'vertical', label: 'Video completo', desc: 'Procesa todo el video', icon: Film },
+                      { value: 'short_auto', label: 'Clip automático', desc: 'Busca el momento con mayor interés', icon: Sparkles },
+                      { value: 'short_manual', label: 'Clip manual', desc: 'Tú eliges el tramo exacto', icon: Scissors },
                     ].map((mode) => {
                       const isUnavailableShortMode = mode.value !== 'vertical' && shortModesDisabled;
+                      const ModeIcon = mode.icon;
                       return (
                         <div key={mode.value} className="relative">
                           <button
                             type="button"
                             disabled={isUnavailableShortMode}
                             aria-disabled={isUnavailableShortMode}
+                            aria-pressed={processingMode === mode.value}
                             onClick={() => { if (!isUnavailableShortMode) setProcessingMode(mode.value); }}
                             className={`w-full p-3 pr-11 rounded-xl text-left transition-all flex items-center gap-3 ${isUnavailableShortMode ? 'bg-muted/30 border-2 border-transparent opacity-50 cursor-not-allowed' : processingMode === mode.value ? 'bg-indigo-500/10 border-2 border-indigo-500/50 dark:bg-indigo-500/20' : 'bg-muted/50 border-2 border-transparent hover:bg-muted hover:border-border'}`}
                           >
-                            <span className="text-xl shrink-0">{mode.icon}</span>
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background/70 text-foreground shadow-sm">
+                              <ModeIcon className="h-4 w-4" />
+                            </span>
                             <div className="min-w-0">
                               <p className={`font-medium text-sm ${processingMode === mode.value && !isUnavailableShortMode ? 'text-indigo-600 dark:text-indigo-400' : ''}`}>{mode.label}</p>
                               <p className="text-xs text-muted-foreground leading-relaxed">{isUnavailableShortMode ? `Requiere un video de al menos ${SHORT_MIN_DURATION_SECONDS}s` : mode.desc}</p>
@@ -507,7 +513,7 @@ export function VideoPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <Label className="text-sm font-medium">2. Duración del clip</Label>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">También influye en cómo EleVideo decide el cierre.</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">También influye en cómo EleVideo decide el cierre.</p>
                       </div>
                       {shortAutoDurationMode === 'auto' && (
                         <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 dark:text-amber-300">Recomendado</Badge>
@@ -527,16 +533,16 @@ export function VideoPage() {
                           >
                             <div className="flex items-center justify-between gap-2">
                               <span className={`text-sm font-medium ${active ? 'text-amber-700 dark:text-amber-300' : ''}`}>{mode.label}</span>
-                              {mode.recommended && <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">Recomendado</span>}
+                              {mode.recommended && <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Recomendado</span>}
                             </div>
-                            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{mode.desc}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{mode.desc}</p>
                           </button>
                         );
                       })}
                     </div>
 
                     {shortAutoDurationMode === 'auto' ? (
-                      <div className="rounded-lg border border-amber-500/20 bg-background/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                      <div className="rounded-lg border border-amber-500/20 bg-background/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                         Prioriza clips de <span className="font-medium text-foreground">30–60 s</span>, pero puede extenderse hasta <span className="font-medium text-foreground">{formatDuration(shortAutoMaxDuration)}</span> si el contenido necesita más tiempo para cerrar de forma natural.
                       </div>
                     ) : (
@@ -546,12 +552,12 @@ export function VideoPage() {
                           <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-bold">{shortAutoDuration}s</span>
                         </div>
                         <Slider value={[shortAutoDuration]} onValueChange={([v]) => setShortAutoDuration(v)} min={SHORT_MIN_DURATION_SECONDS} max={shortAutoMaxDuration} step={1} className="py-1" data-testid="short-duration-slider" />
-                        <div className="flex justify-between text-[10px] text-muted-foreground"><span>{SHORT_MIN_DURATION_SECONDS}s</span><span>{formatDuration(shortAutoMaxDuration)}</span></div>
+                        <div className="flex justify-between text-xs text-muted-foreground"><span>{SHORT_MIN_DURATION_SECONDS}s</span><span>{formatDuration(shortAutoMaxDuration)}</span></div>
                         {shortAutoDurationMode === 'approximate' && (
-                          <p className="text-[11px] leading-relaxed text-muted-foreground">EleVideo puede mover el final unos segundos antes o después para favorecer silencios, cambios de escena o una caída natural de actividad.</p>
+                          <p className="text-xs leading-relaxed text-muted-foreground">EleVideo puede mover el final unos segundos antes o después para favorecer silencios, cambios de escena o una caída natural de actividad.</p>
                         )}
                         {hasVideoDuration && videoDurationSeconds < selectedPlatformMaxDuration && (
-                          <p className="text-[10px] text-center text-muted-foreground">Máximo ajustado a la duración del video: {formatDuration(videoDurationSeconds)}</p>
+                          <p className="text-center text-xs text-muted-foreground">Máximo ajustado a la duración del video: {formatDuration(videoDurationSeconds)}</p>
                         )}
                       </div>
                     )}
@@ -568,16 +574,16 @@ export function VideoPage() {
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Inicio (seg)</Label>
                         <Input type="number" value={shortStartTime} onChange={(e) => handleShortStartTimeChange(e.target.value)} min={0} max={maxManualStartTime} step={1} className="h-9 text-center" data-testid="short-start-time-input" />
-                        {hasVideoDuration && <p className="text-[10px] text-center text-muted-foreground">Máx. inicio: {formatDuration(maxManualStartTime)}</p>}
+                        {hasVideoDuration && <p className="text-center text-xs text-muted-foreground">Máx. inicio: {formatDuration(maxManualStartTime)}</p>}
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Duración</Label>
                         <div className="h-9 px-3 rounded-md bg-muted flex items-center justify-center"><span className="font-medium text-sm">{shortDuration}s</span></div>
-                        <p className="text-[10px] text-center text-muted-foreground">Máx. disponible: {formatDuration(shortManualMaxDuration)}</p>
+                        <p className="text-center text-xs text-muted-foreground">Máx. disponible: {formatDuration(shortManualMaxDuration)}</p>
                       </div>
                     </div>
                     <Slider value={[shortDuration]} onValueChange={([v]) => setShortDuration(v)} min={SHORT_MIN_DURATION_SECONDS} max={shortManualMaxDuration} step={1} data-testid="short-manual-duration-slider" />
-                    <div className="flex justify-between text-[10px] text-muted-foreground"><span>Mín. {SHORT_MIN_DURATION_SECONDS}s</span><span>Máx. {formatDuration(shortManualMaxDuration)}</span></div>
+                    <div className="flex justify-between text-xs text-muted-foreground"><span>Mín. {SHORT_MIN_DURATION_SECONDS}s</span><span>Máx. {formatDuration(shortManualMaxDuration)}</span></div>
                     <div className="text-center text-xs text-muted-foreground">Resultado: {formatDuration(shortStartTime)} → {formatDuration(shortStartTime + shortDuration)}</div>
                   </div>
                 )}
@@ -586,11 +592,11 @@ export function VideoPage() {
                   <Label className="text-sm font-medium">{processingMode === 'vertical' ? '2' : '3'}. Plataforma</Label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { value: 'tiktok', label: 'TikTok', icon: TikTokIcon, activeColor: 'from-[#ff0050] to-[#00f2ea]' },
-                      { value: 'instagram', label: 'Reels', icon: InstagramIcon, activeColor: 'from-[#833ab4] via-[#fd1d1d] to-[#fcb045]' },
-                      { value: 'youtube_shorts', label: 'Shorts', icon: YouTubeIcon, activeColor: 'from-[#ff0000] to-[#cc0000]' },
+                      { value: 'tiktok', label: 'TikTok', icon: TikTokIcon, activeClass: 'border-slate-950 bg-slate-950 text-white ring-cyan-400/40 dark:border-cyan-400/40 dark:bg-slate-900' },
+                      { value: 'instagram', label: 'Reels', icon: InstagramIcon, activeClass: 'border-fuchsia-900 bg-fuchsia-950 text-white ring-pink-400/40 dark:border-pink-400/40' },
+                      { value: 'youtube_shorts', label: 'Shorts', icon: YouTubeIcon, activeClass: 'border-red-900 bg-red-950 text-white ring-red-400/40 dark:border-red-400/40' },
                     ].map((p) => (
-                      <button key={p.value} type="button" onClick={() => setPlatform(p.value)} className={`p-3 rounded-xl text-center transition-all flex flex-col items-center gap-1.5 ${platform === p.value ? `bg-gradient-to-br ${p.activeColor} shadow-lg text-white` : 'bg-muted/50 border border-border hover:bg-muted text-muted-foreground hover:text-foreground'}`}>
+                      <button key={p.value} type="button" aria-pressed={platform === p.value} onClick={() => setPlatform(p.value)} className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all ${platform === p.value ? `${p.activeClass} shadow-lg ring-2` : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
                         <p.icon className="h-5 w-5" />
                         <p className="font-medium text-xs">{p.label}</p>
                       </button>
@@ -610,7 +616,7 @@ export function VideoPage() {
                         <SelectTrigger className="h-9 text-sm" data-testid="quality-select"><SelectValue /></SelectTrigger>
                         <SelectContent>{qualityOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
                       </Select>
-                      <p className="text-[10px] leading-relaxed text-muted-foreground">{qualityOptions.find((opt) => opt.value === quality)?.desc}</p>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{qualityOptions.find((opt) => opt.value === quality)?.desc}</p>
                     </div>
                     <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3">
                       <div className="flex items-center gap-1">
@@ -621,7 +627,7 @@ export function VideoPage() {
                         <SelectTrigger className="h-9 text-sm" data-testid="background-mode-select"><SelectValue /></SelectTrigger>
                         <SelectContent>{backgroundModeOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
                       </Select>
-                      <p className="text-[10px] leading-relaxed text-muted-foreground">{backgroundModeOptions.find((opt) => opt.value === backgroundMode)?.desc}</p>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{backgroundModeOptions.find((opt) => opt.value === backgroundMode)?.desc}</p>
                     </div>
                   </div>
                 </div>
@@ -645,7 +651,7 @@ export function VideoPage() {
                   {processMutation.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Sparkles className="mr-2 h-5 w-5" />}
                   Convertir a vertical
                 </Button>
-                <p className="text-center text-[10px] text-muted-foreground">El procesamiento puede tardar unos minutos</p>
+                <p className="text-center text-xs text-muted-foreground">El procesamiento puede tardar unos minutos</p>
               </CardContent>
             </Card>
           </aside>
@@ -655,8 +661,7 @@ export function VideoPage() {
               <TabsList className="w-full grid grid-cols-2 h-12 p-1 bg-muted/50">
                 <TabsTrigger value="renditions" className="data-[state=active]:bg-background min-w-0 px-2 sm:px-3" data-testid="renditions-tab">
                   <Smartphone className="mr-1.5 sm:mr-2 h-4 w-4 shrink-0" />
-                  <span className="hidden sm:inline truncate">Videos procesados ({renditions.length})</span>
-                  <span className="sm:hidden truncate">Resultados ({renditions.length})</span>
+                  <span className="truncate">Resultados ({renditions.length})</span>
                 </TabsTrigger>
                 <TabsTrigger value="jobs" className="data-[state=active]:bg-background min-w-0 px-2 sm:px-3" data-testid="jobs-tab">
                   <Clock className="mr-1.5 sm:mr-2 h-4 w-4 shrink-0" />
@@ -677,7 +682,7 @@ export function VideoPage() {
                       </div>
                       <div>
                         <h3 className="font-outfit font-semibold text-lg">No hay videos procesados</h3>
-                        <p className="text-muted-foreground text-sm">Configura el procesamiento de arriba y genera tu primer resultado.</p>
+                        <p className="text-sm text-muted-foreground">Configura las opciones de conversión y genera tu primer resultado.</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -724,10 +729,10 @@ export function VideoPage() {
                               <div className="space-y-1.5">
                                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                                   <span className="font-medium text-foreground/80">{platformBadge.label}</span>
-                                  {index === 0 && <Badge variant="secondary" className="h-5 px-1.5 text-[9px]">Más reciente</Badge>}
+                                  {index === 0 && <Badge variant="secondary" className="h-5 px-1.5 text-xs">Más reciente</Badge>}
                                 </div>
                                 <h3 className="font-outfit text-base font-semibold leading-tight">{modeLabel}</h3>
-                                {rendition.createdAt && <p className="text-[10px] text-muted-foreground">{timeAgo(rendition.createdAt)}</p>}
+                                {rendition.createdAt && <p className="text-xs text-muted-foreground">{timeAgo(rendition.createdAt)}</p>}
                                 {hasSegment ? (
                                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <Scissors className="h-3.5 w-3.5" />
@@ -741,8 +746,8 @@ export function VideoPage() {
                               </div>
 
                               <div className="flex flex-wrap gap-1.5">
-                                <Badge variant="outline" className="font-normal text-[10px] sm:text-[11px]">{qualityLabel}</Badge>
-                                <Badge variant="outline" className="font-normal text-[10px] sm:text-[11px]">{bgLabel}</Badge>
+                                <Badge variant="outline" className="text-xs font-normal">{qualityLabel}</Badge>
+                                <Badge variant="outline" className="text-xs font-normal">{bgLabel}</Badge>
                               </div>
 
                               <div className="mt-auto grid grid-cols-[1fr_auto_auto] gap-2 pt-1">
@@ -802,7 +807,9 @@ export function VideoPage() {
                                 <div className={`p-2 rounded-lg shrink-0 ${status.className}`}><StatusIcon className={`h-5 w-5 ${normalizedStatus === 'processing' ? 'animate-spin' : ''}`} /></div>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap"><Badge className={`${status.className} border font-medium`}>{status.label}</Badge><span className="text-sm font-medium">{modeLabel}</span></div>
-                                  <p className="text-xs text-muted-foreground mt-1">Proceso {(job.id || job.jobId).slice(0, 8)}...</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {job.createdAt ? `Iniciado ${timeAgo(job.createdAt)}` : 'Intento reciente'}
+                                  </p>
                                 </div>
                               </div>
                               {isActiveJob(job) && (
@@ -816,7 +823,7 @@ export function VideoPage() {
                                 <div className="flex items-end justify-between gap-4">
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium truncate">{phaseLabel}</p>
-                                    <p className="text-[11px] text-muted-foreground">{remainingValue}% restante</p>
+                                    <p className="text-xs text-muted-foreground">{remainingValue}% restante</p>
                                   </div>
                                   <span className="font-outfit text-lg font-semibold tabular-nums">{progressValue}%</span>
                                 </div>

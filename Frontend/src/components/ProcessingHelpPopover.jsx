@@ -8,11 +8,11 @@ const MODE_HELP = {
     description: 'Procesa el video de principio a fin y lo adapta a formato vertical 9:16 usando la plataforma, calidad, fondo y opciones avanzadas que elijas. No recorta la duración.',
   },
   short_auto: {
-    title: 'Short automático',
+    title: 'Clip automático',
     description: 'Analiza rostros, audio, movimiento, silencios y cambios de escena para elegir un tramo con buen inicio y un cierre natural. Automática prioriza clips compactos pero puede extenderlos hasta el límite de la plataforma; Aproximada puede variar unos segundos y Exacta respeta el tiempo indicado. Una duración elegida por ti nunca puede superar la duración del video original.',
   },
   short_manual: {
-    title: 'Short manual',
+    title: 'Clip manual',
     description: 'Tú decides exactamente dónde empieza el clip y cuánto dura. EleVideo limita el corte a la duración disponible del video y al máximo de la plataforma, y después aplica el mismo procesamiento vertical que al resto de modos.',
   },
 };

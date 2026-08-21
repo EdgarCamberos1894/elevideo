@@ -57,8 +57,8 @@ const getPlatformLabel = (platform) => {
 
 const processingModeLabels = {
   vertical: 'Video completo',
-  short_auto: 'Short automático',
-  short_manual: 'Short manual',
+  short_auto: 'Clip automático',
+  short_manual: 'Clip manual',
 };
 
 const qualityLabels = {
@@ -69,7 +69,7 @@ const qualityLabels = {
 
 const backgroundLabels = {
   smart_crop: 'Recorte inteligente',
-  blurred: 'Fondo desenfocado',
+  blurred: 'Fondo difuminado',
   black: 'Barras negras',
 };
 
@@ -104,10 +104,10 @@ export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
                   {title}
                 </h3>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <Badge className="border-0 bg-indigo-600 px-2 py-0 text-[10px] text-white h-5">
+                  <Badge className="h-5 border-0 bg-indigo-600 px-2 py-0 text-xs text-white">
                     {getPlatformLabel(rendition?.platform)}
                   </Badge>
-                  <Badge variant="outline" className="border-white/30 text-white/80 text-[10px] px-2 py-0 h-5">
+                  <Badge variant="outline" className="h-5 border-white/30 px-2 py-0 text-xs text-white/90">
                     {processingModeLabels[rendition?.processingMode] || rendition?.processingMode}
                   </Badge>
                 </div>
@@ -203,7 +203,7 @@ export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
             )}
 
             {/* Info adicional compacta */}
-            <div className="text-[10px] text-white/40 text-center">
+            <div className="text-center text-xs text-white/70">
               {qualityLabels[rendition?.quality] || rendition?.quality} · {backgroundLabels[rendition?.backgroundMode] || rendition?.backgroundMode}
             </div>
           </div>

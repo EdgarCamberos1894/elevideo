@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Film, Loader2, Eye, EyeOff, Moon, Sun, Sparkles, ArrowRight, MailCheck } from 'lucide-react';
 
 const loginSchema = z.object({
-  email: z.string().email('Email inválido'),
+  email: z.string().email('Introduce un correo electrónico válido'),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
 });
 
@@ -136,11 +136,12 @@ export function LoginPage() {
               <CardContent className="space-y-5 pt-6">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium">
-                    Email
+                    Correo electrónico
                   </Label>
                   <Input
                     id="email"
                     type="email"
+                    autoComplete="email"
                     placeholder="tu@email.com"
                     className="h-12 bg-background/50 border-border/50 focus:border-accent"
                     data-testid="login-email-input"
@@ -160,6 +161,7 @@ export function LoginPage() {
                     <Input
                       id="password"
                       type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
                       placeholder="••••••••"
                       className="h-12 bg-background/50 border-border/50 focus:border-accent pr-12"
                       data-testid="login-password-input"
@@ -219,6 +221,9 @@ export function LoginPage() {
                     <p className="text-xs text-muted-foreground">
                       {demoCredentials.email} · Contraseña: {demoCredentials.password}
                     </p>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Los datos de esta cuenta se restablecen periódicamente.
+                    </p>
                   </div>
                   <Button
                     type="button"
@@ -242,19 +247,19 @@ export function LoginPage() {
               <div className="w-8 h-8 mx-auto rounded-lg bg-blue-500/10 flex items-center justify-center">
                 <Film className="h-4 w-4 text-blue-500" />
               </div>
-              <p>Smart Crop</p>
+              <p>Encuadre inteligente</p>
             </div>
             <div className="space-y-1">
               <div className="w-8 h-8 mx-auto rounded-lg bg-purple-500/10 flex items-center justify-center">
                 <Sparkles className="h-4 w-4 text-purple-500" />
               </div>
-              <p>IA Automática</p>
+              <p>IA automática</p>
             </div>
             <div className="space-y-1">
               <div className="w-8 h-8 mx-auto rounded-lg bg-pink-500/10 flex items-center justify-center">
                 <ArrowRight className="h-4 w-4 text-pink-500" />
               </div>
-              <p>Shorts Fácil</p>
+              <p>Clips automáticos</p>
             </div>
           </div>
         </div>

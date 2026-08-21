@@ -60,7 +60,7 @@ function DashboardMetric({ value, label, accent = false }) {
       <p className={`font-outfit text-lg font-semibold leading-none sm:text-xl ${accent ? 'text-indigo-500' : 'text-foreground'}`}>
         {value}
       </p>
-      <p className="mt-1.5 truncate text-[11px] text-muted-foreground sm:text-xs">{label}</p>
+      <p className="mt-1.5 truncate text-xs text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -417,7 +417,7 @@ export function DashboardPage() {
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 [&::-webkit-details-marker]:hidden">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-foreground">Resumen</p>
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {metrics.map((metric) => `${metric.value} ${metric.label.toLowerCase()}`).join(' · ')}
                   </p>
                 </div>
@@ -481,7 +481,7 @@ export function DashboardPage() {
           </div>
         ) : (
           <section
-            className="relative mt-2 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_24px_70px_-42px_rgba(15,23,42,0.48),0_10px_28px_-20px_rgba(15,23,42,0.2)] ring-1 ring-slate-900/[0.025] dark:border-slate-800 dark:bg-card/55 dark:shadow-sm dark:ring-0"
+            className="relative mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_60px_-42px_rgba(15,23,42,0.42)] ring-1 ring-slate-900/[0.025] dark:border-slate-800 dark:bg-card/55 dark:shadow-sm dark:ring-0"
             aria-labelledby="projects-library-title"
           >
             <div
@@ -489,10 +489,13 @@ export function DashboardPage() {
               aria-hidden="true"
             />
 
-            <div className="border-b border-slate-200 bg-gradient-to-br from-white via-white to-indigo-50/45 px-4 py-4 dark:border-slate-800 dark:bg-none dark:bg-slate-900/35 sm:px-6 sm:py-6">
+            <div
+              className="border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900/35 sm:px-6 sm:py-6"
+              data-testid="projects-library-header"
+            >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                 <div>
-                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600 dark:text-indigo-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true" />
                     Proyectos
                   </div>
@@ -510,7 +513,7 @@ export function DashboardPage() {
                 </span>
               </div>
 
-              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/90 p-2.5 shadow-inner shadow-slate-200/35 dark:border-slate-700/80 dark:bg-slate-950/45 dark:shadow-none sm:mt-5 sm:p-4">
+              <div className="mt-4 sm:mt-5" data-testid="projects-library-filters">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="relative w-full sm:max-w-md">
                     <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
@@ -563,7 +566,10 @@ export function DashboardPage() {
               </div>
             </div>
 
-            <div className="border-t border-white bg-slate-50/75 p-4 dark:border-slate-800/60 dark:bg-background/35 sm:p-6">
+            <div
+              className="bg-slate-50/75 p-4 dark:bg-background/35 sm:p-6"
+              data-testid="projects-library-content"
+            >
               {isLoading ? (
                 renderProjectsSkeleton()
               ) : isSearchEmpty ? (

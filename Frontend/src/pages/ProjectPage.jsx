@@ -398,7 +398,7 @@ export function ProjectPage() {
 
         {/* Videos Grid */}
         {videosLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="overflow-hidden">
                 <Skeleton className="aspect-video w-full" />
@@ -440,7 +440,9 @@ export function ProjectPage() {
             </Card>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className={videos.length === 1
+            ? 'grid max-w-2xl grid-cols-1 gap-6'
+            : 'grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3'}>
             {videos.map((video) => {
               const status = statusConfig[video.status] || statusConfig.UPLOADED;
 

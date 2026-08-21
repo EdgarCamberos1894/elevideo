@@ -45,13 +45,13 @@ export function VerifyEmailPage() {
             </div>
           </div>
           <CardTitle className="font-outfit text-2xl">
-            {status === 'loading' && 'Verificando email...'}
-            {status === 'success' && 'Email verificado'}
+            {status === 'loading' && 'Verificando correo...'}
+            {status === 'success' && 'Correo verificado'}
             {status === 'error' && 'Error de verificación'}
           </CardTitle>
           <CardDescription>
-            {status === 'loading' && 'Por favor espera mientras verificamos tu email'}
-            {status === 'success' && 'Tu email ha sido verificado exitosamente. Ya puedes iniciar sesión.'}
+            {status === 'loading' && 'Espera un momento mientras verificamos tu correo.'}
+            {status === 'success' && 'Tu correo se verificó correctamente. Ya puedes iniciar sesión.'}
             {status === 'error' && 'El enlace de verificación es inválido o ha expirado.'}
           </CardDescription>
         </CardHeader>

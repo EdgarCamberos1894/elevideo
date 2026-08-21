@@ -77,8 +77,8 @@ export function Layout({ children }) {
               <span className="font-outfit text-xl font-bold tracking-tight gradient-text">
                 Elevideo
               </span>
-              <span className="text-[10px] text-muted-foreground -mt-1 hidden sm:block">
-                Smart Video Converter
+              <span className="-mt-1 hidden text-xs text-muted-foreground sm:block">
+                Conversión vertical con IA
               </span>
             </div>
           </Link>

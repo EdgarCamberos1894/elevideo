@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { Film, Loader2, ArrowLeft, Mail } from 'lucide-react';
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email('Email inválido'),
+  email: z.string().email('Introduce un correo electrónico válido'),
 });
 
 export function ForgotPasswordPage() {
@@ -31,7 +31,7 @@ export function ForgotPasswordPage() {
     try {
       await authApi.forgotPassword(data.email);
       setIsSubmitted(true);
-      toast.success('Email enviado');
+      toast.success('Correo enviado');
     } catch (error) {
       // La API siempre devuelve 200 por seguridad
       setIsSubmitted(true);
@@ -50,22 +50,23 @@ export function ForgotPasswordPage() {
             </div>
           </div>
           <CardTitle className="font-outfit text-2xl">
-            {isSubmitted ? 'Revisa tu email' : 'Recuperar contraseña'}
+            {isSubmitted ? 'Revisa tu correo' : 'Recuperar contraseña'}
           </CardTitle>
           <CardDescription>
             {isSubmitted
               ? 'Te hemos enviado un enlace para restablecer tu contraseña'
-              : 'Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña'}
+              : 'Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña'}
           </CardDescription>
         </CardHeader>
         {!isSubmitted ? (
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Correo electrónico</Label>
                 <Input
                   id="email"
                   type="email"
+                  autoComplete="email"
                   placeholder="tu@email.com"
                   data-testid="forgot-password-email-input"
                   {...form.register('email')}

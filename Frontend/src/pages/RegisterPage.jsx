@@ -17,7 +17,7 @@ const passwordRegex = /^(?=.*[A-ZÑ])(?=.*[a-zñ])(?=.*\d)(?=.*[-@#$%^&*.,()_+{}
 const registerSchema = z.object({
   firstName: z.string().min(1, 'El nombre es requerido'),
   lastName: z.string().min(1, 'El apellido es requerido'),
-  email: z.string().email('Email inválido'),
+  email: z.string().email('Introduce un correo electrónico válido'),
   password: z.string()
     .min(8, 'La contraseña debe tener al menos 8 caracteres')
     .regex(passwordRegex, 'Debe tener mayúscula, minúscula, número y carácter especial'),
@@ -144,10 +144,11 @@ export function RegisterPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">Correo electrónico</Label>
                   <Input
                     id="email"
                     type="email"
+                    autoComplete="email"
                     placeholder="tu@email.com"
                     className="h-11 bg-background/50 border-border/50"
                     data-testid="register-email-input"
@@ -163,6 +164,7 @@ export function RegisterPage() {
                     <Input
                       id="password"
                       type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
                       placeholder="••••••••"
                       className="h-11 bg-background/50 border-border/50 pr-12"
                       data-testid="register-password-input"
@@ -202,6 +204,7 @@ export function RegisterPage() {
                   <Input
                     id="confirmPassword"
                     type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
                     placeholder="••••••••"
                     className="h-11 bg-background/50 border-border/50"
                     data-testid="register-confirm-password-input"
