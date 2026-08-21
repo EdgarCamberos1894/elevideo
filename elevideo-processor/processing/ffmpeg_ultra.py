@@ -103,7 +103,11 @@ def _process_smart_crop(
         crop_vf = f"crop={crop_w}:{crop_h}:(iw-{crop_w})/2:(ih-{crop_h})/2"
     else:
         positions = sorted(positions, key=lambda position: position[0])
-        expr = _build_lerp(positions, config.STABILIZATION.get("use_easing", False))
+        expr = _build_lerp(
+            positions,
+            config.STABILIZATION.get("use_easing", False),
+            max_keyframes=int(config.KEYFRAME_SETTINGS.get("max_keyframes", 80)),
+        )
         crop_vf = f"crop={crop_w}:{crop_h}:x='{expr}':y=(ih-{crop_h})/2"
 
     filters = [crop_vf, f"scale={output_w}:{output_h}:flags=lanczos"]
@@ -165,35 +169,64 @@ def _normalize_position(position) -> Tuple[float, float, bool]:
     return timestamp, x, critical
 
 
-def _build_lerp(positions: List[Tuple[float, float]], use_easing: bool) -> str:
-    positions = [_normalize_position(position) for position in positions]
+def _build_lerp(
+    positions: List[Tuple[float, float]],
+    use_easing: bool,
+    max_keyframes: int = 80,
+) -> str:
+    positions = _deduplicate_positions(
+        [_normalize_position(position) for position in positions]
+    )
     if len(positions) == 1:
         return str(int(positions[0][1]))
 
-    max_keyframes = 28
+    max_keyframes = max(2, max_keyframes)
     if len(positions) > max_keyframes:
         before = len(positions)
         positions = _reduce_positions_preserving_critical(positions, max_keyframes)
         logger.info(
-            "Keyframes reducidos a %d para expresión FFmpeg | críticos preservados=%d | antes=%d",
+            "Keyframes reducidos a %d | críticos preservados=%d | antes=%d",
             len(positions),
             sum(1 for position in positions if position[2]),
             before,
         )
 
-    expr = ""
-    open_groups = 0
-    for i in range(len(positions) - 1):
-        t1, x1, _ = positions[i]
-        t2, x2, _ = positions[i + 1]
-        dur = t2 - t1
-        if dur <= 0:
-            continue
-        interp = f"{int(x1)}+({int(x2)}-{int(x1)})*(t-{t1:.3f})/{dur:.3f}"
-        expr += f"if(between(t,{t1:.3f},{t2:.3f}),{interp},"
-        open_groups += 1
+    t0, x0, _ = positions[0]
+    tn, xn, _ = positions[-1]
+    slopes = []
+    for index in range(len(positions) - 1):
+        t1, x1, _ = positions[index]
+        t2, x2, _ = positions[index + 1]
+        duration = max(1e-6, t2 - t1)
+        slopes.append((x2 - x1) / duration)
 
-    return expr + str(int(positions[-1][1])) + ")" * open_groups
+    terms = [f"{x0:.3f}+({slopes[0]:.8f})*(t-{t0:.3f})"]
+    for index in range(1, len(positions) - 1):
+        ti = positions[index][0]
+        slope_delta = slopes[index] - slopes[index - 1]
+        if abs(slope_delta) >= 1e-8:
+            terms.append(
+                f"+({slope_delta:.8f})*max(t-{ti:.3f},0)"
+            )
+
+    core = "".join(terms)
+    return (
+        f"if(lt(t,{t0:.3f}),{x0:.3f},"
+        f"if(gt(t,{tn:.3f}),{xn:.3f},{core}))"
+    )
+
+
+def _deduplicate_positions(positions):
+    if not positions:
+        return []
+    deduplicated = [positions[0]]
+    for timestamp, x, critical in positions[1:]:
+        last_timestamp, _, last_critical = deduplicated[-1]
+        if abs(timestamp - last_timestamp) < 1e-6:
+            deduplicated[-1] = (timestamp, x, bool(critical or last_critical))
+        else:
+            deduplicated.append((timestamp, x, critical))
+    return deduplicated
 
 
 def _reduce_positions_preserving_critical(
