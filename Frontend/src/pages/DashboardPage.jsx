@@ -202,6 +202,135 @@ export function DashboardPage() {
   const firstVisible = totalElements === 0 ? 0 : page * PROJECTS_PAGE_SIZE + 1;
   const lastVisible = Math.min(totalElements, (page + 1) * PROJECTS_PAGE_SIZE);
 
+  const renderProjectsSkeleton = () => (
+    <div
+      className="grid gap-5 sm:gap-6"
+      style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 20rem), 1fr))' }}
+    >
+      {[...Array(PROJECTS_PAGE_SIZE)].map((_, index) => (
+        <Card key={index} className="h-[250px] w-full overflow-hidden border-border/60">
+          <div className="h-24 bg-gradient-to-br from-muted to-muted/50" />
+          <CardHeader>
+            <Skeleton className="h-5 w-3/4" />
+            <Skeleton className="mt-2 h-4 w-1/2" />
+          </CardHeader>
+        </Card>
+      ))}
+    </div>
+  );
+
+  const renderProjectsGrid = () => (
+    <>
+      <div
+        className="grid gap-5 sm:gap-6"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 20rem), 1fr))' }}
+      >
+        {projects.map((project, index) => {
+          const seed = Number(project.id ?? index);
+          return (
+            <Link
+              key={project.id}
+              to={`/projects/${project.id}`}
+              className="group block h-full w-full"
+            >
+              <Card
+                className="card-3d h-full overflow-hidden border-border/60 bg-card hover:border-indigo-500/40 dark:bg-card/80"
+                data-testid={`project-card-${project.id}`}
+              >
+                <div
+                  className="relative h-24 overflow-hidden"
+                  style={{
+                    background: `linear-gradient(135deg,
+                      hsl(${220 + (seed * 30) % 60}, 70%, ${50 + (seed % 3) * 5}%),
+                      hsl(${260 + (seed * 30) % 60}, 70%, ${45 + (seed % 3) * 5}%))`,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-black/10" />
+                  <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-card to-transparent dark:from-card/95" />
+                  <div className="absolute right-3 top-3 z-10">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(event) => event.preventDefault()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 bg-black/30 text-white hover:bg-black/50"
+                          data-testid={`project-menu-${project.id}`}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(event) => { event.preventDefault(); openEditDialog(project); }}>
+                          <Pencil className="mr-2 h-4 w-4" />Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(event) => { event.preventDefault(); openDeleteDialog(project); }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="absolute -bottom-5 left-4">
+                    <div className="rounded-xl border border-border/60 bg-card p-3 shadow-lg dark:bg-slate-800">
+                      <Folder className="h-6 w-6 text-indigo-500 transition-colors group-hover:text-purple-500" />
+                    </div>
+                  </div>
+                </div>
+
+                <CardHeader className="pt-8">
+                  <CardTitle className="flex items-center justify-between font-outfit text-lg text-foreground transition-colors group-hover:text-indigo-500">
+                    <span className="truncate">{project.name}</span>
+                    <ArrowRight className="h-4 w-4 flex-shrink-0 -translate-x-2 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+                  </CardTitle>
+                  {project.description && <CardDescription className="line-clamp-2">{project.description}</CardDescription>}
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Film className="h-4 w-4" />
+                      <span>{project.videoCount || 0} videos</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
+      </div>
+
+      {totalPages > 1 && (
+        <nav className="mt-5 flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between" aria-label="Paginación de proyectos">
+          <p className="text-center text-xs text-muted-foreground sm:text-left">
+            Mostrando {firstVisible}–{lastVisible} de {totalElements}
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+              disabled={!hasPrevious}
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />Anterior
+            </Button>
+            <span className="min-w-[92px] text-center text-xs font-medium text-muted-foreground">
+              Página {page + 1} de {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((current) => current + 1)}
+              disabled={!hasNext}
+            >
+              Siguiente<ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+        </nav>
+      )}
+    </>
+  );
+
   return (
     <Layout>
       <div className="space-y-6 sm:space-y-8" data-testid="dashboard-page">
@@ -305,68 +434,8 @@ export function DashboardPage() {
           </>
         )}
 
-        {hasAnyProjects && (
-          <section className="space-y-3" aria-label="Buscar y ordenar proyectos">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="relative w-full sm:max-w-md">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="Buscar proyecto..."
-                  className="h-10 pl-9"
-                  aria-label="Buscar proyecto por nombre o descripción"
-                />
-              </div>
-
-              <Select
-                value={sortValue}
-                onValueChange={(value) => {
-                  setSortValue(value);
-                  setPage(0);
-                }}
-              >
-                <SelectTrigger className="h-10 w-full sm:w-[190px]" aria-label="Ordenar proyectos">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-              <span>{search ? `${totalElements} resultado${totalElements === 1 ? '' : 's'}` : `${projectCount} proyecto${projectCount === 1 ? '' : 's'} en total`}</span>
-              {search && (
-                <button
-                  type="button"
-                  className="font-medium text-indigo-500 hover:text-indigo-600"
-                  onClick={() => setSearchInput('')}
-                >
-                  Limpiar búsqueda
-                </button>
-              )}
-            </div>
-          </section>
-        )}
-
-        {isLoading ? (
-          <div
-            className="grid gap-5 sm:gap-6"
-            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 20rem), 1fr))' }}
-          >
-            {[...Array(PROJECTS_PAGE_SIZE)].map((_, index) => (
-              <Card key={index} className="h-[250px] w-full overflow-hidden">
-                <div className="h-24 bg-gradient-to-br from-muted to-muted/50" />
-                <CardHeader>
-                  <Skeleton className="h-5 w-3/4" />
-                  <Skeleton className="mt-2 h-4 w-1/2" />
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
+        {isLoading && !hasAnyProjects ? (
+          renderProjectsSkeleton()
         ) : error ? (
           <Card className="border-destructive/50 py-16 text-center">
             <CardContent className="space-y-4">
@@ -402,129 +471,102 @@ export function DashboardPage() {
               </CardContent>
             </Card>
           </div>
-        ) : isSearchEmpty ? (
-          <Card className="border-dashed py-14 text-center">
-            <CardContent className="space-y-4">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                <Search className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <h3 className="font-outfit text-lg font-semibold">No encontramos ese proyecto</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Prueba con otro nombre o una palabra de la descripción.</p>
-              </div>
-              <Button variant="outline" onClick={() => setSearchInput('')}>Limpiar búsqueda</Button>
-            </CardContent>
-          </Card>
         ) : (
-          <>
-            <div
-              className="grid gap-5 sm:gap-6"
-              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 20rem), 1fr))' }}
-            >
-              {projects.map((project, index) => {
-                const seed = Number(project.id ?? index);
-                return (
-                  <Link
-                    key={project.id}
-                    to={`/projects/${project.id}`}
-                    className="group block h-full w-full"
-                  >
-                    <Card
-                      className="card-3d h-full overflow-hidden border-border/50 bg-card hover:border-indigo-500/40 dark:bg-card/80"
-                      data-testid={`project-card-${project.id}`}
-                    >
-                      <div
-                        className="relative h-24 overflow-hidden"
-                        style={{
-                          background: `linear-gradient(135deg,
-                            hsl(${220 + (seed * 30) % 60}, 70%, ${50 + (seed % 3) * 5}%),
-                            hsl(${260 + (seed * 30) % 60}, 70%, ${45 + (seed % 3) * 5}%))`,
-                        }}
-                      >
-                        <div className="absolute inset-0 bg-black/10" />
-                        <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-card to-transparent dark:from-card/95" />
-                        <div className="absolute right-3 top-3 z-10">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(event) => event.preventDefault()}>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 bg-black/30 text-white hover:bg-black/50"
-                                data-testid={`project-menu-${project.id}`}
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(event) => { event.preventDefault(); openEditDialog(project); }}>
-                                <Pencil className="mr-2 h-4 w-4" />Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(event) => { event.preventDefault(); openDeleteDialog(project); }}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />Eliminar
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                        <div className="absolute -bottom-5 left-4">
-                          <div className="rounded-xl border border-border/50 bg-card p-3 shadow-lg dark:bg-slate-800">
-                            <Folder className="h-6 w-6 text-indigo-500 transition-colors group-hover:text-purple-500" />
-                          </div>
-                        </div>
-                      </div>
+          <section
+            className="overflow-hidden rounded-2xl border border-slate-200/90 bg-card/80 shadow-sm dark:border-slate-800 dark:bg-card/55"
+            aria-labelledby="projects-library-title"
+          >
+            <div className="border-b border-slate-200/90 bg-slate-50/70 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/35 sm:px-5 sm:py-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <div>
+                  <h2 id="projects-library-title" className="font-outfit text-lg font-semibold text-foreground sm:text-xl">
+                    Biblioteca de proyectos
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Busca, ordena y abre tus proyectos desde esta colección.
+                  </p>
+                </div>
+                <span className="w-fit rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                  {search
+                    ? `${totalElements} resultado${totalElements === 1 ? '' : 's'}`
+                    : `${projectCount} proyecto${projectCount === 1 ? '' : 's'}`}
+                </span>
+              </div>
 
-                      <CardHeader className="pt-8">
-                        <CardTitle className="flex items-center justify-between font-outfit text-lg text-foreground transition-colors group-hover:text-indigo-500">
-                          <span className="truncate">{project.name}</span>
-                          <ArrowRight className="h-4 w-4 flex-shrink-0 -translate-x-2 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
-                        </CardTitle>
-                        {project.description && <CardDescription className="line-clamp-2">{project.description}</CardDescription>}
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1.5">
-                            <Film className="h-4 w-4" />
-                            <span>{project.videoCount || 0} videos</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                );
-              })}
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-700/80 dark:bg-slate-950/45 sm:p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="relative w-full sm:max-w-md">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
+                    <Input
+                      value={searchInput}
+                      onChange={(event) => setSearchInput(event.target.value)}
+                      placeholder="Buscar proyecto..."
+                      className="h-11 border-slate-300 bg-white pl-10 text-slate-900 shadow-sm transition-colors placeholder:text-slate-500 hover:border-slate-400 focus-visible:border-indigo-400 focus-visible:ring-indigo-500/25 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100 dark:placeholder:text-slate-400 dark:hover:border-slate-600"
+                      aria-label="Buscar proyecto por nombre o descripción"
+                    />
+                  </div>
+
+                  <Select
+                    value={sortValue}
+                    onValueChange={(value) => {
+                      setSortValue(value);
+                      setPage(0);
+                    }}
+                  >
+                    <SelectTrigger
+                      className="h-11 w-full border-slate-300 bg-white text-slate-900 shadow-sm transition-colors hover:border-slate-400 focus:ring-indigo-500/25 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100 dark:hover:border-slate-600 sm:w-[205px]"
+                      aria-label="Ordenar proyectos"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="mt-3 flex flex-col gap-2 border-t border-slate-200/80 pt-3 text-xs text-muted-foreground dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    {search
+                      ? `${totalElements} resultado${totalElements === 1 ? '' : 's'} para “${search}”`
+                      : 'La búsqueda y el orden se aplican a los proyectos mostrados abajo.'}
+                  </span>
+                  {search && (
+                    <button
+                      type="button"
+                      className="w-fit font-medium text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                      onClick={() => setSearchInput('')}
+                    >
+                      Limpiar búsqueda
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {totalPages > 1 && (
-              <nav className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between" aria-label="Paginación de proyectos">
-                <p className="text-center text-xs text-muted-foreground sm:text-left">
-                  Mostrando {firstVisible}–{lastVisible} de {totalElements}
-                </p>
-                <div className="flex items-center justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((current) => Math.max(0, current - 1))}
-                    disabled={!hasPrevious}
-                  >
-                    <ChevronLeft className="mr-1 h-4 w-4" />Anterior
-                  </Button>
-                  <span className="min-w-[92px] text-center text-xs font-medium text-muted-foreground">
-                    Página {page + 1} de {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((current) => current + 1)}
-                    disabled={!hasNext}
-                  >
-                    Siguiente<ChevronRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </div>
-              </nav>
-            )}
-          </>
+            <div className="bg-background/35 p-4 sm:p-5">
+              {isLoading ? (
+                renderProjectsSkeleton()
+              ) : isSearchEmpty ? (
+                <Card className="border-dashed border-slate-300 bg-card/70 py-14 text-center dark:border-slate-700">
+                  <CardContent className="space-y-4">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                      <Search className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <h3 className="font-outfit text-lg font-semibold">No encontramos ese proyecto</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">Prueba con otro nombre o una palabra de la descripción.</p>
+                    </div>
+                    <Button variant="outline" onClick={() => setSearchInput('')}>Limpiar búsqueda</Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                renderProjectsGrid()
+              )}
+            </div>
+          </section>
         )}
 
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
