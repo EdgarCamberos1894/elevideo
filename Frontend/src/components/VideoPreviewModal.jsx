@@ -64,15 +64,18 @@ export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
 
   const segmentStart = rendition?.segmentStart;
   const segmentDuration = rendition?.segmentDuration;
-  const segmentEnd = (segmentStart !== undefined && segmentDuration) 
-    ? segmentStart + segmentDuration 
+  const segmentEnd = (segmentStart !== undefined && segmentDuration)
+    ? segmentStart + segmentDuration
     : null;
 
   const isShort = rendition?.processingMode?.includes('short');
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={`p-0 overflow-hidden border-0 bg-transparent shadow-none ${isVertical ? 'max-w-xs' : 'max-w-4xl'}`}>
+      <DialogContent
+        showCloseButton={false}
+        className={`p-0 overflow-hidden border-0 bg-transparent shadow-none ${isVertical ? 'max-w-xs' : 'max-w-4xl'}`}
+      >
         {isVertical ? (
           /* Phone Frame para videos verticales - Compacto */
           <div className="relative flex flex-col items-center gap-3">
@@ -118,7 +121,7 @@ export function VideoPreviewModal({ isOpen, onClose, video, rendition }) {
             <div className="relative">
               <div className="relative bg-gradient-to-b from-zinc-700 via-zinc-800 to-zinc-900 rounded-[2rem] p-1 shadow-2xl shadow-black/60">
                 <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-tr from-white/10 via-transparent to-transparent pointer-events-none" />
-                
+
                 <div className="relative bg-black rounded-[1.8rem] overflow-hidden">
                   {/* Notch pequeño */}
                   <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-20">
