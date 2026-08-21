@@ -16,12 +16,13 @@ from core.exceptions import (
 from models.schemas import (
     VideoProcessRequest,
     BackgroundMode,
+    Platform,
     QualityLevel,
     ShortAutoRequest,
     ShortAutoDurationMode,
     ShortManualRequest,
     SHORT_MIN_DURATION_SECONDS,
-    SHORT_MAX_DURATION_SECONDS,
+    get_platform_short_max_duration,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,12 +30,12 @@ logger = logging.getLogger(__name__)
 
 class VideoLimits:
     SUPPORTED_FORMATS    = ["mp4", "mov", "avi", "mkv", "webm"]
-    MAX_SIZE_BYTES       = 500 * 1024 * 1024   # 500 MB
+    MAX_SIZE_BYTES       = 500 * 1024 * 1024
     MIN_DURATION_SECONDS = 3
-    MAX_DURATION_SECONDS = 600                  # 10 minutos
+    MAX_DURATION_SECONDS = 600
     MIN_WIDTH            = 640
     MIN_HEIGHT           = 360
-    MAX_WIDTH            = 7680                 # 8K
+    MAX_WIDTH            = 7680
     MAX_HEIGHT           = 4320
 
 
@@ -141,7 +142,10 @@ class ShortOptionsValidator:
         target_duration: Optional[int],
         duration_mode: ShortAutoDurationMode = ShortAutoDurationMode.exact,
         video_duration: Optional[float] = None,
+        platform: Optional[Platform] = None,
     ) -> None:
+        platform_max = get_platform_short_max_duration(platform)
+
         if video_duration is not None and video_duration < SHORT_MIN_DURATION_SECONDS:
             raise VideoDurationError(
                 f"Video demasiado corto para generar un short: {video_duration:.1f}s. "
@@ -154,20 +158,20 @@ class ShortOptionsValidator:
             )
 
         if target_duration is not None:
-            if not (SHORT_MIN_DURATION_SECONDS <= target_duration <= SHORT_MAX_DURATION_SECONDS):
+            if not (SHORT_MIN_DURATION_SECONDS <= target_duration <= platform_max):
                 raise VideoDurationError(
-                    f"Duración del short fuera de rango ({SHORT_MIN_DURATION_SECONDS}-{SHORT_MAX_DURATION_SECONDS}s). "
+                    f"Duración del short fuera de rango ({SHORT_MIN_DURATION_SECONDS}-{platform_max}s) "
+                    f"para {platform.value if platform else 'la plataforma seleccionada'}. "
                     f"Se recibió: {target_duration}s"
                 )
             if (
                 video_duration is not None
                 and duration_mode != ShortAutoDurationMode.auto
-                and video_duration < target_duration
+                and target_duration > video_duration
             ):
-                logger.warning(
-                    "Video (%.1fs) más corto que target (%ds). Se usará duración disponible.",
-                    video_duration,
-                    target_duration,
+                raise VideoDurationError(
+                    f"La duración objetivo ({target_duration}s) no puede superar "
+                    f"la duración del video ({video_duration:.1f}s)."
                 )
 
     @staticmethod
@@ -175,13 +179,15 @@ class ShortOptionsValidator:
         start_time: float,
         duration: int,
         video_duration: Optional[float] = None,
+        platform: Optional[Platform] = None,
     ) -> None:
         if start_time < 0:
             raise ValidationError(f"El tiempo de inicio no puede ser negativo: {start_time}s")
 
-        if not (SHORT_MIN_DURATION_SECONDS <= duration <= SHORT_MAX_DURATION_SECONDS):
+        platform_max = get_platform_short_max_duration(platform)
+        if not (SHORT_MIN_DURATION_SECONDS <= duration <= platform_max):
             raise VideoDurationError(
-                f"Duración del segmento fuera de rango ({SHORT_MIN_DURATION_SECONDS}-{SHORT_MAX_DURATION_SECONDS}s). "
+                f"Duración del segmento fuera de rango ({SHORT_MIN_DURATION_SECONDS}-{platform_max}s). "
                 f"Se recibió: {duration}s"
             )
 
@@ -230,12 +236,14 @@ def validate_video_request(request: VideoProcessRequest) -> dict:
             target_duration=request.short_auto_duration,
             duration_mode=request.short_auto_duration_mode,
             video_duration=None,
+            platform=request.platform,
         )
     elif isinstance(request, ShortManualRequest):
         ShortOptionsValidator.validate_short_manual(
             start_time=request.short_options.start_time,
             duration=request.short_options.duration,
             video_duration=None,
+            platform=request.platform,
         )
 
     logger.info("Request validado | mode=%s | platform=%s | quality=%s",
