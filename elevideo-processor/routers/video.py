@@ -4,7 +4,7 @@ from datetime import datetime
 from threading import Lock
 from typing import Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from models.schemas import (
     VideoProcessRequest,
@@ -20,6 +20,12 @@ from core.exceptions import ValidationError, VideoProcessingError
 from core.error_handler import ErrorHandler
 from core.auth import TokenData, require_service_token, verify_job_ownership
 from utils.cancellation_manager import get_cancellation_manager, JobCancelledException
+from utils.job_dispatcher import BoundedJobDispatcher
+from utils.processing_guardrails import (
+    GuardrailRejected,
+    ProcessingGuardrails,
+    ProcessingGuardrailSettings,
+)
 from services.webhook_service import notify_job_completed, notify_job_failed, notify_job_cancelled
 
 logger = logging.getLogger(__name__)
@@ -28,17 +34,21 @@ router = APIRouter(prefix="/api/video", tags=["Video"])
 
 jobs_db: Dict[str, dict] = {}
 idempotency_jobs: Dict[str, str] = {}
-idempotency_lock = Lock()
+admission_lock = Lock()
 cancellation_manager = get_cancellation_manager()
 
+guardrail_settings = ProcessingGuardrailSettings.from_env()
+guardrails = ProcessingGuardrails(guardrail_settings)
+job_dispatcher: Optional[BoundedJobDispatcher] = None
+
 cloudinary_service: CloudinaryService = None
-video_service: VideoProcessingService  = None
+video_service: VideoProcessingService = None
 
 
 def set_services(cloudinary_svc: CloudinaryService, video_svc: VideoProcessingService) -> None:
-    global cloudinary_service, video_service
+    global cloudinary_service, video_service, job_dispatcher
     cloudinary_service = cloudinary_svc
-    video_service      = video_svc
+    video_service = video_svc
 
     def _on_progress(job_id: str, data: dict) -> None:
         if job_id in jobs_db:
@@ -53,13 +63,28 @@ def set_services(cloudinary_svc: CloudinaryService, video_svc: VideoProcessingSe
 
     video_service.set_progress_callback(_on_progress)
 
+    if job_dispatcher is None:
+        job_dispatcher = BoundedJobDispatcher(
+            process_video_task,
+            max_workers=guardrail_settings.max_concurrent_jobs,
+            max_queue_size=guardrail_settings.max_queue_size,
+        )
+        logger.info(
+            "Dispatcher de procesamiento listo | workers=%s | queue=%s",
+            guardrail_settings.max_concurrent_jobs,
+            guardrail_settings.max_queue_size,
+        )
+
 
 def _fail_job(job_id: str, user_message: str) -> None:
-    jobs_db[job_id].update({
+    job = jobs_db.get(job_id)
+    if job is None:
+        return
+    job.update({
         "status":       JobStatus.failed,
         "message":      user_message,
         "error_detail": user_message,
-        "progress":     0,
+        "progress":     job.get("progress", 0),
         "completed_at": datetime.utcnow(),
     })
 
@@ -107,15 +132,41 @@ def _new_job_record(
     }
 
 
+def _remove_job(job_id: str) -> None:
+    job = jobs_db.pop(job_id, None)
+    if not job:
+        return
+    scope = job.get("idempotency_scope")
+    if scope and idempotency_jobs.get(scope) == job_id:
+        idempotency_jobs.pop(scope, None)
+
+
 def process_video_task(job_id: str, request: VideoProcessRequest) -> None:
+    job = jobs_db.get(job_id)
+    if job is None:
+        logger.info("Job omitido porque ya no existe | job_id=%s", job_id)
+        return
+    if job.get("status") == JobStatus.cancelled:
+        logger.info("Job omitido porque fue cancelado en cola | job_id=%s", job_id)
+        return
+
     try:
         logger.info("Job iniciado | job_id=%s | mode=%s", job_id, request.processing_mode.value)
 
-        jobs_db[job_id].update({"status": JobStatus.processing, "message": "Procesando el video...", "progress": 10})
+        job.update({
+            "status": JobStatus.processing,
+            "message": "Procesando el video...",
+            "progress": max(1, int(job.get("progress") or 0)),
+        })
 
         output_url, metrics = video_service.process_video(request, job_id)
 
-        jobs_db[job_id].update({
+        job = jobs_db.get(job_id)
+        if job is None:
+            logger.warning("Job terminó pero fue eliminado del registro | job_id=%s", job_id)
+            return
+
+        job.update({
             "status":                  JobStatus.completed,
             "message":                 "Video procesado exitosamente",
             "progress":                100,
@@ -130,29 +181,35 @@ def process_video_task(job_id: str, request: VideoProcessRequest) -> None:
         })
 
         logger.info("Job completado | job_id=%s | url=%s", job_id, output_url)
-        notify_job_completed(job_id=job_id, output_url=output_url, metrics=metrics, job_data=jobs_db[job_id])
+        notify_job_completed(job_id=job_id, output_url=output_url, metrics=metrics, job_data=job)
 
     except JobCancelledException:
-        jobs_db[job_id].update({
+        job = jobs_db.get(job_id)
+        if job is None:
+            return
+        job.update({
             "status":       JobStatus.cancelled,
             "message":      "Procesamiento cancelado por el usuario",
-            "progress":     0,
             "completed_at": datetime.utcnow(),
         })
         logger.info("Job cancelado | job_id=%s", job_id)
-        notify_job_cancelled(job_id=job_id, job_data=jobs_db[job_id])
+        notify_job_cancelled(job_id=job_id, job_data=job)
 
     except VideoProcessingError as e:
         error_info = ErrorHandler.handle(e, job_id=job_id, operation="background_task")
         _fail_job(job_id, error_info["user_message"])
         logger.error("Job falló | job_id=%s | error=%s", job_id, error_info["user_message"])
-        notify_job_failed(job_id=job_id, error_message=error_info["user_message"], job_data=jobs_db[job_id])
+        job = jobs_db.get(job_id)
+        if job is not None:
+            notify_job_failed(job_id=job_id, error_message=error_info["user_message"], job_data=job)
 
     except Exception as e:
         error_info = ErrorHandler.handle(e, job_id=job_id, operation="background_task")
         _fail_job(job_id, error_info["user_message"])
         logger.exception("Job falló con error inesperado | job_id=%s", job_id)
-        notify_job_failed(job_id=job_id, error_message=error_info["user_message"], job_data=jobs_db[job_id])
+        job = jobs_db.get(job_id)
+        if job is not None:
+            notify_job_failed(job_id=job_id, error_message=error_info["user_message"], job_data=job)
 
 
 _PROCESS_EXAMPLES = {
@@ -199,6 +256,8 @@ _ERRORS = {
     responses={
         400: {"description": "Request inválido"},
         409: {"description": "Idempotency-Key reutilizada con otro request"},
+        429: {"description": "Protección antiabuso activada"},
+        503: {"description": "Cola global temporalmente llena"},
         **_ERRORS,
     },
     openapi_extra={
@@ -210,7 +269,6 @@ _ERRORS = {
 )
 async def process_video(
     request: VideoProcessRequest,
-    background_tasks: BackgroundTasks,
     token: TokenData = Depends(require_service_token),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
@@ -223,10 +281,14 @@ async def process_video(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al validar el request")
 
     request_data = request.model_dump()
-    scope = None
-    if idempotency_key and idempotency_key.strip():
-        scope = _idempotency_scope(str(token.user_id), idempotency_key)
-        with idempotency_lock:
+    scope = _idempotency_scope(str(token.user_id), idempotency_key) if idempotency_key and idempotency_key.strip() else None
+
+    with admission_lock:
+        removed = guardrails.cleanup_finished_jobs(jobs_db, idempotency_jobs)
+        if removed:
+            logger.info("Jobs antiguos liberados de memoria | removed=%s", removed)
+
+        if scope:
             existing_job_id = idempotency_jobs.get(scope)
             existing_job = jobs_db.get(existing_job_id) if existing_job_id else None
             if existing_job is not None:
@@ -244,22 +306,45 @@ async def process_video(
             if existing_job_id:
                 idempotency_jobs.pop(scope, None)
 
-            job_id = str(uuid.uuid4())
-            jobs_db[job_id] = _new_job_record(job_id, token, request, video_info, scope)
-            idempotency_jobs[scope] = job_id
-    else:
-        job_id = str(uuid.uuid4())
-        jobs_db[job_id] = _new_job_record(job_id, token, request, video_info, None)
+        try:
+            guardrails.assert_can_create(str(token.user_id), jobs_db.values())
+        except GuardrailRejected as exc:
+            logger.warning(
+                "Solicitud bloqueada por guardrail | user_id=%s | status=%s | detail=%s",
+                token.user_id,
+                exc.status_code,
+                exc.detail,
+            )
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
-    background_tasks.add_task(process_video_task, job_id, request)
+        if job_dispatcher is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="El procesador todavía no está listo. Intenta nuevamente en un momento.",
+            )
+
+        job_id = str(uuid.uuid4())
+        jobs_db[job_id] = _new_job_record(job_id, token, request, video_info, scope)
+        if scope:
+            idempotency_jobs[scope] = job_id
+
+        if not job_dispatcher.submit(job_id, request):
+            _remove_job(job_id)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="La cola de procesamiento está llena. Intenta nuevamente cuando termine algún video.",
+            )
 
     logger.info(
-        "Job creado | job_id=%s | user_id=%s | mode=%s | platform=%s | idempotent=%s",
+        "Job creado | job_id=%s | user_id=%s | mode=%s | platform=%s | "
+        "idempotent=%s | queue_depth=%s/%s",
         job_id,
         token.user_id,
         request.processing_mode.value,
         request.platform.value,
         bool(scope),
+        job_dispatcher.queue_depth,
+        job_dispatcher.capacity,
     )
 
     return _created_response(jobs_db[job_id])
@@ -352,8 +437,22 @@ async def cancel_job(
             detail=f"El job ya está en estado '{current_status}' y no puede ser cancelado",
         )
 
+    if current_status == JobStatus.pending:
+        job.update({
+            "status": JobStatus.cancelled,
+            "message": "Procesamiento cancelado antes de comenzar",
+            "completed_at": datetime.utcnow(),
+        })
+        logger.info("Job cancelado mientras estaba en cola | job_id=%s", job_id)
+        notify_job_cancelled(job_id=job_id, job_data=job)
+        return {
+            "job_id":          job_id,
+            "message":         "Job cancelado. No llegará a usar recursos de procesamiento.",
+            "previous_status": current_status,
+        }
+
     cancellation_manager.request_cancellation(job_id)
-    jobs_db[job_id]["message"] = "Cancelando procesamiento..."
+    job["message"] = "Cancelando procesamiento..."
     logger.info("Cancelación solicitada | job_id=%s | status=%s", job_id, current_status)
 
     return {
@@ -365,18 +464,22 @@ async def cancel_job(
 
 @router.get("/jobs", summary="Listar jobs del usuario", tags=["Utilidades"])
 async def list_jobs(token: TokenData = Depends(require_service_token)):
-    user_jobs = [
-        {
-            "job_id":          jid,
-            "status":          data["status"],
-            "processing_mode": data.get("processing_mode"),
-            "created_at":      data["created_at"],
-            "platform":        data["request"]["platform"],
-            "quality":         data["request"]["quality"],
-        }
-        for jid, data in jobs_db.items()
-        if data.get("user_id") == token.user_id
-    ]
+    user_jobs = sorted(
+        [
+            {
+                "job_id":          jid,
+                "status":          data["status"],
+                "processing_mode": data.get("processing_mode"),
+                "created_at":      data["created_at"],
+                "platform":        data["request"]["platform"],
+                "quality":         data["request"]["quality"],
+            }
+            for jid, data in jobs_db.items()
+            if data.get("user_id") == token.user_id
+        ],
+        key=lambda item: item["created_at"],
+        reverse=True,
+    )
     return {"total_jobs": len(user_jobs), "jobs": user_jobs}
 
 
@@ -384,7 +487,10 @@ async def list_jobs(token: TokenData = Depends(require_service_token)):
     "/jobs/{job_id}",
     summary="Eliminar job",
     tags=["Utilidades"],
-    responses={404: {"description": "Job no encontrado"}},
+    responses={
+        404: {"description": "Job no encontrado"},
+        409: {"description": "El job sigue activo"},
+    },
 )
 async def delete_job(
     job_id: str,
@@ -393,12 +499,14 @@ async def delete_job(
     job = jobs_db.get(job_id)
     verify_job_ownership(job, token, job_id)
 
-    scope = job.get("idempotency_scope")
-    if scope:
-        with idempotency_lock:
-            if idempotency_jobs.get(scope) == job_id:
-                idempotency_jobs.pop(scope, None)
+    if job.get("status") in (JobStatus.pending, JobStatus.processing):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cancela el job antes de eliminarlo.",
+        )
 
-    del jobs_db[job_id]
+    with admission_lock:
+        _remove_job(job_id)
+
     logger.info("Job eliminado | job_id=%s | user_id=%s", job_id, token.user_id)
     return {"message": f"Job {job_id} eliminado exitosamente"}
