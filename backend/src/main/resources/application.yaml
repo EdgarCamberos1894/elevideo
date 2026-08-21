@@ -48,6 +48,9 @@ security:
 app:
   demo:
     enabled: ${DEMO_MODE_ENABLED:true}
+  processing:
+    guardrails:
+      max-input-duration-seconds: ${PROCESSING_MAX_INPUT_DURATION_SECONDS:1800}
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
     verify-email-path: ${FRONTEND_VERIFY_EMAIL_PATH:/verify-email}
