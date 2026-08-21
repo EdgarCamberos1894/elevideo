@@ -6,6 +6,12 @@ import subprocess
 import tempfile
 from typing import List, Optional, Tuple
 
+from utils.encoding_profiles import (
+    build_video_encoding_args,
+    describe_rate_control,
+    get_audio_bitrate,
+    get_pixel_format,
+)
 from utils.ffmpeg_progress import probe_duration_seconds, run_ffmpeg_with_progress
 from utils.processing_progress_context import get_active_progress_tracker
 from utils.progress_tracker import ProcessingPhase
@@ -542,28 +548,26 @@ def _encode(
         else:
             cmd.extend(["-vf", vf])
 
-        cmd.extend([
-            "-c:v", encoder,
-            "-preset", settings["preset"],
-            "-crf", str(settings["crf"]),
-        ])
+        cmd.extend(["-c:v", encoder])
+        cmd.extend(build_video_encoding_args(encoder, preset, settings))
 
-        if encoder == "libx264":
-            cmd.extend(["-profile:v", settings.get("profile", "high")])
-
+        audio_bitrate = get_audio_bitrate(settings)
+        pixel_format = get_pixel_format(encoder)
         cmd.extend([
-            "-pix_fmt", "yuv420p",
+            "-pix_fmt", pixel_format,
             "-movflags", "+faststart",
             "-c:a", "aac",
-            "-b:a", "128k",
+            "-b:a", audio_bitrate,
             output_path,
         ])
 
         logger.info(
-            "Encoding | preset=%s | ffmpeg_preset=%s | crf=%s",
+            "Encoding | quality=%s | encoder=%s | rate_control=%s | pix_fmt=%s | audio=%s",
             preset,
-            settings["preset"],
-            settings["crf"],
+            encoder,
+            describe_rate_control(encoder, preset, settings),
+            pixel_format,
+            audio_bitrate,
         )
 
         tracker = get_active_progress_tracker()
