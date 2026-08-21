@@ -473,27 +473,36 @@ export function DashboardPage() {
           </div>
         ) : (
           <section
-            className="overflow-hidden rounded-2xl border border-slate-200/90 bg-card/80 shadow-sm dark:border-slate-800 dark:bg-card/55"
+            className="relative mt-2 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_24px_70px_-42px_rgba(15,23,42,0.48),0_10px_28px_-20px_rgba(15,23,42,0.2)] ring-1 ring-slate-900/[0.025] dark:border-slate-800 dark:bg-card/55 dark:shadow-sm dark:ring-0"
             aria-labelledby="projects-library-title"
           >
-            <div className="border-b border-slate-200/90 bg-slate-50/70 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/35 sm:px-5 sm:py-5">
+            <div
+              className="h-1 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"
+              aria-hidden="true"
+            />
+
+            <div className="border-b border-slate-200 bg-gradient-to-br from-white via-white to-indigo-50/45 px-4 py-5 dark:border-slate-800 dark:bg-none dark:bg-slate-900/35 sm:px-6 sm:py-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                 <div>
-                  <h2 id="projects-library-title" className="font-outfit text-lg font-semibold text-foreground sm:text-xl">
+                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true" />
+                    Proyectos
+                  </div>
+                  <h2 id="projects-library-title" className="font-outfit text-xl font-semibold text-slate-950 dark:text-foreground sm:text-2xl">
                     Biblioteca de proyectos
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1.5 max-w-2xl text-sm text-slate-600 dark:text-muted-foreground">
                     Busca, ordena y abre tus proyectos desde esta colección.
                   </p>
                 </div>
-                <span className="w-fit rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                   {search
                     ? `${totalElements} resultado${totalElements === 1 ? '' : 's'}`
                     : `${projectCount} proyecto${projectCount === 1 ? '' : 's'}`}
                 </span>
               </div>
 
-              <div className="mt-4 rounded-xl border border-slate-200 bg-white/80 p-3 shadow-sm dark:border-slate-700/80 dark:bg-slate-950/45 sm:p-4">
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/90 p-3 shadow-inner shadow-slate-200/35 dark:border-slate-700/80 dark:bg-slate-950/45 dark:shadow-none sm:p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="relative w-full sm:max-w-md">
                     <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
@@ -527,7 +536,7 @@ export function DashboardPage() {
                   </Select>
                 </div>
 
-                <div className="mt-3 flex flex-col gap-2 border-t border-slate-200/80 pt-3 text-xs text-muted-foreground dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mt-3 flex flex-col gap-2 border-t border-slate-200/80 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                   <span>
                     {search
                       ? `${totalElements} resultado${totalElements === 1 ? '' : 's'} para “${search}”`
@@ -546,11 +555,11 @@ export function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-background/35 p-4 sm:p-5">
+            <div className="border-t border-white bg-slate-50/75 p-4 dark:border-slate-800/60 dark:bg-background/35 sm:p-6">
               {isLoading ? (
                 renderProjectsSkeleton()
               ) : isSearchEmpty ? (
-                <Card className="border-dashed border-slate-300 bg-card/70 py-14 text-center dark:border-slate-700">
+                <Card className="border-dashed border-slate-300 bg-white py-14 text-center shadow-sm dark:border-slate-700 dark:bg-card/70">
                   <CardContent className="space-y-4">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                       <Search className="h-5 w-5 text-muted-foreground" />
