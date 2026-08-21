@@ -88,10 +88,11 @@ def _build_blurred_filter(width: int, height: int, config, mode_config: dict) ->
         minimum=0.50,
         maximum=1.20,
     )
-    blur_sigma = _bounded_float(
-        mode_config.get("background_blur_sigma", _adaptive_blur_sigma(width, height)),
-        minimum=8.0,
-        maximum=40.0,
+    configured_blur_sigma = mode_config.get("background_blur_sigma")
+    blur_sigma = (
+        _adaptive_blur_sigma(width, height)
+        if configured_blur_sigma is None
+        else _bounded_float(configured_blur_sigma, minimum=8.0, maximum=40.0)
     )
 
     background_width = _even_dimension(width * zoom)
