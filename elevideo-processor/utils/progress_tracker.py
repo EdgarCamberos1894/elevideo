@@ -141,8 +141,9 @@ PHASE_MESSAGES: Dict[ProcessingPhase, str] = {
     ProcessingPhase.FAILED:            "Error durante el procesamiento",
 }
 
-_NOTIFY_MIN_PROGRESS_DELTA = 1
-_NOTIFY_MIN_INTERVAL       = 2.0
+_NOTIFY_MIN_PROGRESS_DELTA    = 1
+_NOTIFY_MIN_PROGRESS_INTERVAL = 0.45
+_NOTIFY_HEARTBEAT_INTERVAL    = 2.0
 
 
 class ProgressTracker:
@@ -336,10 +337,20 @@ class ProgressTracker:
         return int(round(max(0.0, min(1.0, local)) * 100))
 
     def _should_notify(self) -> bool:
-        progress_changed = abs(self.progress_percentage - self._last_notified_progress) >= _NOTIFY_MIN_PROGRESS_DELTA
-        phase_changed    = self.current_phase != self._last_notified_phase
-        time_elapsed     = (time.time() - self._last_notification_time) >= _NOTIFY_MIN_INTERVAL
-        return progress_changed or phase_changed or time_elapsed
+        now = time.time()
+        since_last = now - self._last_notification_time
+        phase_changed = self.current_phase != self._last_notified_phase
+        if phase_changed:
+            return True
+
+        progress_changed = (
+            abs(self.progress_percentage - self._last_notified_progress)
+            >= _NOTIFY_MIN_PROGRESS_DELTA
+        )
+        if progress_changed and since_last >= _NOTIFY_MIN_PROGRESS_INTERVAL:
+            return True
+
+        return since_last >= _NOTIFY_HEARTBEAT_INTERVAL
 
     def _notify(self, message: Optional[str] = None, force: bool = False) -> None:
         if not self.update_callback:
