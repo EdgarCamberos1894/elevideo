@@ -9,11 +9,11 @@ const MODE_HELP = {
   },
   short_auto: {
     title: 'Short automático',
-    description: 'Analiza rostros, audio, movimiento, silencios y cambios de escena para elegir un tramo con buen inicio y un cierre natural. Con duración Automática decide también cuánto debe durar; Aproximada puede variar unos segundos y Exacta respeta el tiempo indicado.',
+    description: 'Analiza rostros, audio, movimiento, silencios y cambios de escena para elegir un tramo con buen inicio y un cierre natural. Automática prioriza clips compactos pero puede extenderlos hasta el límite de la plataforma; Aproximada puede variar unos segundos y Exacta respeta el tiempo indicado. Una duración elegida por ti nunca puede superar la duración del video original.',
   },
   short_manual: {
     title: 'Short manual',
-    description: 'Tú decides exactamente dónde empieza el clip y cuánto dura. EleVideo recorta ese intervalo y aplica después el mismo procesamiento vertical que al resto de modos.',
+    description: 'Tú decides exactamente dónde empieza el clip y cuánto dura. EleVideo limita el corte a la duración disponible del video y al máximo de la plataforma, y después aplica el mismo procesamiento vertical que al resto de modos.',
   },
 };
 
