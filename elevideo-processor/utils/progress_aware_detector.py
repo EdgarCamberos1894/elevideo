@@ -22,20 +22,23 @@ class ProgressAwareDetector:
         self._expected_samples = 1
         self._processed_samples = 0
         self._message = "Analizando video..."
-        self._max_fraction = 0.96
+        self._start_fraction = 0.0
+        self._end_fraction = 0.96
 
     def configure(
         self,
         phase: ProcessingPhase,
         expected_samples: int,
         message: str,
-        max_fraction: float = 0.96,
+        start_fraction: float = 0.0,
+        end_fraction: float = 0.96,
     ) -> None:
         self._phase = phase
         self._expected_samples = max(1, int(expected_samples))
         self._processed_samples = 0
         self._message = message
-        self._max_fraction = max(0.1, min(1.0, float(max_fraction)))
+        self._start_fraction = max(0.0, min(1.0, float(start_fraction)))
+        self._end_fraction = max(self._start_fraction, min(1.0, float(end_fraction)))
 
     def complete_phase(self, message: Optional[str] = None) -> None:
         if self._phase is None:
@@ -46,9 +49,9 @@ class ProgressAwareDetector:
         result = self._detector.detect(frame)
         if self._phase is not None and self._tracker.current_phase == self._phase:
             self._processed_samples += 1
-            fraction = min(
-                self._max_fraction,
-                self._processed_samples / self._expected_samples,
+            raw_fraction = min(1.0, self._processed_samples / self._expected_samples)
+            fraction = self._start_fraction + raw_fraction * (
+                self._end_fraction - self._start_fraction
             )
             visible_processed = min(self._processed_samples, self._expected_samples)
             self._tracker.update_phase_fraction(
