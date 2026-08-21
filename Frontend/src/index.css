@@ -103,6 +103,82 @@
     radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.12) 0px, transparent 40%);
 }
 
+/*
+ * Processed video results
+ * Scoped to VideoPage so the richer result-card treatment does not affect
+ * cards or grids elsewhere in the application.
+ */
+@layer components {
+  [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid {
+    gap: 1rem;
+  }
+
+  [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden {
+    position: relative;
+    isolation: isolate;
+    border-radius: 1.125rem;
+    border-color: hsl(var(--border) / 0.9);
+    background:
+      radial-gradient(circle at 100% 0%, rgb(99 102 241 / 0.08), transparent 34%),
+      linear-gradient(145deg, hsl(var(--card)) 0%, hsl(var(--card)) 72%, hsl(var(--muted) / 0.5) 100%);
+    box-shadow:
+      0 1px 2px rgb(15 23 42 / 0.04),
+      0 16px 34px -26px rgb(15 23 42 / 0.55);
+  }
+
+  [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 3;
+    height: 2px;
+    pointer-events: none;
+    background: linear-gradient(90deg, rgb(99 102 241 / 0.9), rgb(168 85 247 / 0.75), transparent 82%);
+  }
+
+  [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden:hover {
+    transform: translateY(-2px);
+    border-color: rgb(99 102 241 / 0.32);
+    box-shadow:
+      0 4px 10px -5px rgb(15 23 42 / 0.16),
+      0 22px 46px -28px rgb(79 70 229 / 0.42);
+  }
+
+  [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden > .grid {
+    min-height: 218px;
+  }
+
+  [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden > .grid > button {
+    border-right: 1px solid hsl(var(--border) / 0.72);
+    box-shadow: inset -14px 0 24px -24px rgb(15 23 42 / 0.65);
+  }
+
+  [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden > .grid > div:last-child {
+    background: linear-gradient(180deg, transparent, hsl(var(--muted) / 0.12));
+  }
+
+  [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden > .grid > div:last-child > div:last-child {
+    margin-top: auto;
+    padding-top: 0.8rem;
+    border-top: 1px solid hsl(var(--border) / 0.7);
+  }
+
+  .dark [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden {
+    background:
+      radial-gradient(circle at 100% 0%, rgb(99 102 241 / 0.13), transparent 36%),
+      linear-gradient(145deg, hsl(var(--card)) 0%, hsl(var(--card)) 72%, hsl(var(--muted) / 0.42) 100%);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.2),
+      0 20px 44px -30px rgb(0 0 0 / 0.9);
+  }
+
+  @media (min-width: 1024px) {
+    [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+  }
+}
+
 html {
   scroll-behavior: smooth;
 }
