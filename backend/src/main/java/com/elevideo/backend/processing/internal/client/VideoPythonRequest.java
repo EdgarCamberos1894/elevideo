@@ -29,6 +29,9 @@ public class VideoPythonRequest {
     @JsonProperty("short_options")
     private ShortOptionsDto shortOptions;
 
+    @JsonProperty("short_auto_duration_mode")
+    private String shortAutoDurationMode;
+
     @JsonProperty("short_auto_duration")
     private Integer shortAutoDuration;
 

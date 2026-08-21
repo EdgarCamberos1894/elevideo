@@ -36,6 +36,12 @@ class ProcessingMode(str, Enum):
     short_manual  = "short_manual"
 
 
+class ShortAutoDurationMode(str, Enum):
+    auto        = "auto"
+    approximate = "approximate"
+    exact       = "exact"
+
+
 class JobStatus(str, Enum):
     pending    = "pending"
     processing = "processing"
@@ -125,26 +131,33 @@ class VerticalRequest(BaseVideoRequest):
 
 
 class ShortAutoRequest(BaseVideoRequest):
-    processing_mode:     Literal[ProcessingMode.short_auto] = Field(default=ProcessingMode.short_auto)
-    short_auto_duration: int = Field(
+    processing_mode: Literal[ProcessingMode.short_auto] = Field(default=ProcessingMode.short_auto)
+    short_auto_duration_mode: ShortAutoDurationMode = Field(
+        default=ShortAutoDurationMode.exact,
+        description=(
+            "auto: EleVideo decide inicio y duración; approximate: permite variar alrededor del objetivo; "
+            "exact: respeta la duración solicitada."
+        ),
+    )
+    short_auto_duration: Optional[int] = Field(
         default=SHORT_DEFAULT_DURATION_SECONDS,
         ge=SHORT_MIN_DURATION_SECONDS,
         le=SHORT_MAX_DURATION_SECONDS,
         description=(
-            f"Duración deseada del short ({SHORT_MIN_DURATION_SECONDS}-{SHORT_MAX_DURATION_SECONDS}s). "
-            "Si el video es más corto que este valor, se usa la duración completa."
+            f"Duración objetivo ({SHORT_MIN_DURATION_SECONDS}-{SHORT_MAX_DURATION_SECONDS}s). "
+            "Se ignora como límite rígido cuando short_auto_duration_mode=auto."
         ),
     )
 
     model_config = {
         "json_schema_extra": {
             "example": {
-                "processing_mode":      "short_auto",
-                "platform":             "tiktok",
-                "background_mode":      "smart_crop",
-                "quality":              "normal",
-                "short_auto_duration":  30,
-                "cloudinary_input_url": "https://res.cloudinary.com/demo/video/upload/sample.mp4",
+                "processing_mode":          "short_auto",
+                "platform":                 "tiktok",
+                "background_mode":          "smart_crop",
+                "quality":                  "normal",
+                "short_auto_duration_mode": "auto",
+                "cloudinary_input_url":     "https://res.cloudinary.com/demo/video/upload/sample.mp4",
             }
         }
     }

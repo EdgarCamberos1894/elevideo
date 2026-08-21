@@ -18,6 +18,7 @@ from models.schemas import (
     BackgroundMode,
     QualityLevel,
     ShortAutoRequest,
+    ShortAutoDurationMode,
     ShortManualRequest,
     SHORT_MIN_DURATION_SECONDS,
     SHORT_MAX_DURATION_SECONDS,
@@ -136,21 +137,38 @@ class VideoValidator:
 class ShortOptionsValidator:
 
     @staticmethod
-    def validate_short_auto(target_duration: int, video_duration: Optional[float] = None) -> None:
-        if not (SHORT_MIN_DURATION_SECONDS <= target_duration <= SHORT_MAX_DURATION_SECONDS):
+    def validate_short_auto(
+        target_duration: Optional[int],
+        duration_mode: ShortAutoDurationMode = ShortAutoDurationMode.exact,
+        video_duration: Optional[float] = None,
+    ) -> None:
+        if video_duration is not None and video_duration < SHORT_MIN_DURATION_SECONDS:
             raise VideoDurationError(
-                f"Duración del short fuera de rango ({SHORT_MIN_DURATION_SECONDS}-{SHORT_MAX_DURATION_SECONDS}s). "
-                f"Se recibió: {target_duration}s"
+                f"Video demasiado corto para generar un short: {video_duration:.1f}s. "
+                f"Mínimo: {SHORT_MIN_DURATION_SECONDS}s"
             )
-        if video_duration is not None:
-            if video_duration < SHORT_MIN_DURATION_SECONDS:
+
+        if duration_mode != ShortAutoDurationMode.auto and target_duration is None:
+            raise VideoDurationError(
+                "Debes indicar una duración objetivo para el modo aproximado o exacto."
+            )
+
+        if target_duration is not None:
+            if not (SHORT_MIN_DURATION_SECONDS <= target_duration <= SHORT_MAX_DURATION_SECONDS):
                 raise VideoDurationError(
-                    f"Video demasiado corto para generar un short: {video_duration:.1f}s. "
-                    f"Mínimo: {SHORT_MIN_DURATION_SECONDS}s"
+                    f"Duración del short fuera de rango ({SHORT_MIN_DURATION_SECONDS}-{SHORT_MAX_DURATION_SECONDS}s). "
+                    f"Se recibió: {target_duration}s"
                 )
-            if video_duration < target_duration:
-                logger.warning("Video (%.1fs) más corto que target (%ds). Se usará duración completa.",
-                               video_duration, target_duration)
+            if (
+                video_duration is not None
+                and duration_mode != ShortAutoDurationMode.auto
+                and video_duration < target_duration
+            ):
+                logger.warning(
+                    "Video (%.1fs) más corto que target (%ds). Se usará duración disponible.",
+                    video_duration,
+                    target_duration,
+                )
 
     @staticmethod
     def validate_short_manual(
@@ -210,6 +228,7 @@ def validate_video_request(request: VideoProcessRequest) -> dict:
     if isinstance(request, ShortAutoRequest):
         ShortOptionsValidator.validate_short_auto(
             target_duration=request.short_auto_duration,
+            duration_mode=request.short_auto_duration_mode,
             video_duration=None,
         )
     elif isinstance(request, ShortManualRequest):

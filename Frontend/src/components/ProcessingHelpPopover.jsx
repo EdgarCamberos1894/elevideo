@@ -9,7 +9,7 @@ const MODE_HELP = {
   },
   short_auto: {
     title: 'Short automático',
-    description: 'Analiza el video para buscar un tramo con mayor potencial de interés. Considera señales como presencia de rostros, intensidad del audio, movimiento y cambios de escena, y después procesa solo ese segmento.',
+    description: 'Analiza rostros, audio, movimiento, silencios y cambios de escena para elegir un tramo con buen inicio y un cierre natural. Con duración Automática decide también cuánto debe durar; Aproximada puede variar unos segundos y Exacta respeta el tiempo indicado.',
   },
   short_manual: {
     title: 'Short manual',
