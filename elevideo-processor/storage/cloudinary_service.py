@@ -1,12 +1,14 @@
 import logging
 import os
 import subprocess
-from typing import Optional
+from typing import Callable, Optional
 
 import cloudinary
 import cloudinary.api
 import cloudinary.uploader
 import requests
+
+from utils.ffmpeg_progress import probe_duration_seconds, run_ffmpeg_with_progress
 
 logger = logging.getLogger(__name__)
 
@@ -23,23 +25,49 @@ class CloudinaryService:
         self._ensure_temp_dir()
         logger.info("CloudinaryService inicializado | temp_dir=%s", temp_dir)
 
-    def download_video(self, url: str, job_id: str) -> str:
+    def download_video(
+        self,
+        url: str,
+        job_id: str,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> str:
         self._ensure_temp_dir()
         local_path = os.path.join(self.temp_dir, f"{job_id}_input.mp4")
         try:
             response = requests.get(url, stream=True)
             response.raise_for_status()
+            total_bytes = int(response.headers.get("Content-Length") or 0)
+            downloaded_bytes = 0
+            last_fraction = -1.0
+
             with open(local_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
+                for chunk in response.iter_content(chunk_size=256 * 1024):
+                    if not chunk:
+                        continue
+                    f.write(chunk)
+                    downloaded_bytes += len(chunk)
+                    if progress_callback and total_bytes > 0:
+                        fraction = min(1.0, downloaded_bytes / total_bytes)
+                        if fraction >= 1.0 or fraction - last_fraction >= 0.01:
+                            last_fraction = fraction
+                            progress_callback(fraction)
+
+            if progress_callback:
+                progress_callback(1.0)
+
             logger.info("Video descargado | job_id=%s | size=%.2fMB",
                         job_id, os.path.getsize(local_path) / (1024 * 1024))
             return local_path
         except Exception as e:
             raise Exception(f"No se pudo descargar el video: {e}") from e
 
-    def upload_video(self, local_path: str, job_id: str, folder: str = "processed_videos") -> str:
+    def upload_video(
+        self,
+        local_path: str,
+        job_id: str,
+        folder: str = "processed_videos",
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> str:
         if not os.path.exists(local_path):
             raise FileNotFoundError(f"Archivo no encontrado: {local_path}")
 
@@ -49,7 +77,16 @@ class CloudinaryService:
 
         try:
             if size_mb > (_CLOUDINARY_LIMIT_MB - 5):
-                upload_path    = self._compress(local_path, _CLOUDINARY_LIMIT_MB * _COMPRESSION_TARGET_RATIO, job_id)
+                upload_path = self._compress(
+                    local_path,
+                    _CLOUDINARY_LIMIT_MB * _COMPRESSION_TARGET_RATIO,
+                    job_id,
+                    progress_callback=(
+                        (lambda fraction: progress_callback(fraction * 0.45))
+                        if progress_callback
+                        else None
+                    ),
+                )
                 size_mb        = os.path.getsize(upload_path) / (1024 * 1024)
                 was_compressed = True
 
@@ -58,6 +95,12 @@ class CloudinaryService:
 
             logger.info("Subiendo video | job_id=%s | size=%.2fMB | compressed=%s | chunked=%s",
                         job_id, size_mb, was_compressed, use_chunked)
+
+            # El SDK de Cloudinary no expone callback de bytes enviados para
+            # upload()/upload_large(). Reportamos progreso real de compresión si
+            # aplica y dejamos el tramo de red como fase explícita/indeterminada.
+            if progress_callback and was_compressed:
+                progress_callback(0.45)
 
             if use_chunked:
                 result = cloudinary.uploader.upload_large(
@@ -69,6 +112,9 @@ class CloudinaryService:
                     upload_path, resource_type="video", public_id=public_id,
                     overwrite=True, timeout=300, eager_async=False,
                 )
+
+            if progress_callback:
+                progress_callback(1.0)
 
             video_url = result.get("secure_url")
             logger.info("Video subido | job_id=%s | url=%s", job_id, video_url)
@@ -131,22 +177,31 @@ class CloudinaryService:
     def _ensure_temp_dir(self) -> None:
         os.makedirs(self.temp_dir, exist_ok=True)
 
-    def _compress(self, input_path: str, target_mb: float, job_id: str, max_attempts: int = 3) -> str:
+    def _compress(
+        self,
+        input_path: str,
+        target_mb: float,
+        job_id: str,
+        max_attempts: int = 3,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> str:
         self._ensure_temp_dir()
         original_mb = os.path.getsize(input_path) / (1024 * 1024)
-        base_timeout = max(600, int(original_mb * 6))
         crf_values   = [23, 26, 28]
+        duration     = probe_duration_seconds(input_path)
 
-        logger.warning("Video excede límite | job_id=%s | size=%.2fMB | target=%.2fMB — comprimiendo",
+        logger.warning("Video excede límite | job_id=%s | size=%.2fMB | target=%.2fMB - comprimiendo",
                        job_id, original_mb, target_mb)
 
         for attempt in range(max_attempts):
-            crf            = crf_values[min(attempt, len(crf_values) - 1)]
-            timeout        = int(base_timeout * (1.0 + attempt * 0.3))
-            output_path    = os.path.join(self.temp_dir, f"{job_id}_compressed_{attempt + 1}.mp4")
+            crf         = crf_values[min(attempt, len(crf_values) - 1)]
+            output_path = os.path.join(self.temp_dir, f"{job_id}_compressed_{attempt + 1}.mp4")
 
             try:
-                subprocess.run(
+                attempt_base = attempt / max_attempts
+                attempt_span = 1.0 / max_attempts
+
+                run_ffmpeg_with_progress(
                     [
                         "ffmpeg", "-y", "-i", input_path,
                         "-c:v", "libx264", "-crf", str(crf), "-preset", "medium",
@@ -155,7 +210,13 @@ class CloudinaryService:
                         "-c:a", "aac", "-b:a", "96k",
                         output_path,
                     ],
-                    check=True, capture_output=True, text=True, timeout=timeout,
+                    duration_seconds=duration,
+                    on_progress=(
+                        (lambda fraction, base=attempt_base, span=attempt_span:
+                            progress_callback(min(0.99, base + fraction * span)))
+                        if progress_callback
+                        else None
+                    ),
                 )
 
                 result_mb = os.path.getsize(output_path) / (1024 * 1024)
@@ -163,11 +224,13 @@ class CloudinaryService:
                             attempt + 1, max_attempts, job_id, crf, result_mb, target_mb)
 
                 if result_mb <= target_mb:
+                    if progress_callback:
+                        progress_callback(1.0)
                     return output_path
 
                 os.remove(output_path)
 
-            except (subprocess.TimeoutExpired, subprocess.CalledProcessError, Exception) as e:
+            except Exception as e:
                 logger.error("Compresión falló en intento %d | job_id=%s | %s", attempt + 1, job_id, e)
                 if os.path.exists(output_path):
                     os.remove(output_path)
