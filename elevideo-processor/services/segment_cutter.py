@@ -3,7 +3,9 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
+
+from utils.ffmpeg_progress import run_ffmpeg_with_progress
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,7 @@ class SegmentCutter:
         duration: int,
         job_id: str,
         temp_dir: Optional[str] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> str:
         if temp_dir is None:
             temp_dir = str(Path(input_path).parent)
@@ -43,7 +46,11 @@ class SegmentCutter:
         ]
 
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            run_ffmpeg_with_progress(
+                cmd,
+                duration_seconds=float(duration),
+                on_progress=progress_callback,
+            )
         except subprocess.CalledProcessError as e:
             logger.error("FFmpeg falló al cortar segmento | job_id=%s | stderr=%s",
                          job_id, (e.stderr or "")[-500:])
