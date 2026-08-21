@@ -1,9 +1,9 @@
 package com.elevideo.backend.shared.exception;
 
+import com.elevideo.backend.processing.internal.client.ProcessingRateLimitException;
 import com.elevideo.backend.shared.exception.base.ConflictException;
 import com.elevideo.backend.shared.exception.base.ForbiddenException;
 import com.elevideo.backend.shared.exception.base.NotFoundException;
-import com.elevideo.backend.shared.web.ApiResult;
 import com.elevideo.backend.user.internal.InvalidCurrentPasswordException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.Builder;
@@ -91,8 +91,16 @@ public class GlobalExceptionHandler {
     }
 
     // ----------------------------------------------------------------
-    // Servicios externos
+    // Servicios externos / capacidad de procesamiento
     // ----------------------------------------------------------------
+
+    @ExceptionHandler(ProcessingRateLimitException.class)
+    public ResponseEntity<ErrorResponse> handleProcessingRateLimit(
+            ProcessingRateLimitException ex,
+            HttpServletRequest request) {
+        log.info("Processing guardrail [{}]: {}", request.getRequestURI(), ex.getMessage());
+        return buildError(HttpStatus.TOO_MANY_REQUESTS, "PROCESSING_RATE_LIMIT", ex.getMessage(), request);
+    }
 
     @ExceptionHandler(com.elevideo.backend.processing.internal.client.PythonServiceException.class)
     public ResponseEntity<ErrorResponse> handlePythonService(

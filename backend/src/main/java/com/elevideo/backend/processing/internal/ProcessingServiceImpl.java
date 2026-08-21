@@ -24,6 +24,7 @@ import com.elevideo.backend.shared.security.CurrentUserProvider;
 import com.elevideo.backend.video.api.VideoService;
 import com.elevideo.backend.video.api.dto.VideoResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -49,6 +50,9 @@ class ProcessingServiceImpl implements ProcessingService {
     private final VideoService             videoService;
     private final CurrentUserProvider      currentUserProvider;
 
+    @Value("${app.processing.guardrails.max-input-duration-seconds:1800}")
+    private long maxInputDurationSeconds;
+
     @Override
     @Transactional
     public VideoJobCreatedResponse processVideo(Long videoId, VideoProcessRequest request, String baseUrl) {
@@ -56,6 +60,7 @@ class ProcessingServiceImpl implements ProcessingService {
 
         UUID userId = currentUserProvider.getCurrentUserId();
         VideoResponse video = videoService.getVideoById(videoId);
+        validateDemoInputDuration(video);
         validateClipRange(request, video);
         VideoPythonRequest pythonRequest = processingMapper.toVideoPythonRequest(request, video.videoUrl());
 
@@ -202,6 +207,20 @@ class ProcessingServiceImpl implements ProcessingService {
     private void assertVideoAccess(Long videoId) {
         UUID userId = currentUserProvider.getCurrentUserId();
         videoService.assertVideoOwnedByUser(videoId, userId);
+    }
+
+    private void validateDemoInputDuration(VideoResponse video) {
+        Long durationInSeconds = video.durationInSeconds();
+        if (durationInSeconds == null || durationInSeconds <= 0 || maxInputDurationSeconds <= 0) {
+            return;
+        }
+        if (durationInSeconds > maxInputDurationSeconds) {
+            long maxMinutes = Math.max(1, maxInputDurationSeconds / 60);
+            throw new InvalidClipRangeException(
+                    "Para proteger los recursos del demo, el video fuente no puede superar "
+                            + maxMinutes + " minutos."
+            );
+        }
     }
 
     private void validateClipRange(VideoProcessRequest request, VideoResponse video) {
