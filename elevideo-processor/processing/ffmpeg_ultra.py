@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import subprocess
 from typing import List, Optional, Tuple
@@ -135,7 +136,7 @@ def _process_smart_crop(
             hybrid_stats["max_required_width"],
             hybrid_stats["max_viewport_width"],
         )
-        return _process_hybrid_smart_crop(
+        hybrid_ok = _process_hybrid_smart_crop(
             input_path,
             output_path,
             positions,
@@ -147,7 +148,36 @@ def _process_smart_crop(
             output_w,
             output_h,
         )
+        if hybrid_ok:
+            return True
+        logger.warning(
+            "Render híbrido falló; reintentando automáticamente con Smart Crop normal"
+        )
 
+    return _process_standard_smart_crop(
+        input_path,
+        output_path,
+        positions,
+        config,
+        encoder,
+        crop_w,
+        crop_h,
+        output_w,
+        output_h,
+    )
+
+
+def _process_standard_smart_crop(
+    input_path,
+    output_path,
+    positions,
+    config,
+    encoder,
+    crop_w: int,
+    crop_h: int,
+    output_w: int,
+    output_h: int,
+) -> bool:
     if not positions:
         crop_vf = f"crop={crop_w}:{crop_h}:(iw-{crop_w})/2:(ih-{crop_h})/2"
     else:
@@ -178,25 +208,22 @@ def _process_hybrid_smart_crop(
     output_w: int,
     output_h: int,
 ) -> bool:
-    source_w, _ = _probe_video_size(input_path)
-    if source_w <= 0:
-        logger.warning("No se pudo obtener ancho fuente; se usa Smart Crop normal")
-        positions = sorted(positions, key=lambda position: position[0])
-        expr = _build_lerp(
-            positions,
-            config.STABILIZATION.get("use_easing", False),
-            max_keyframes=int(config.KEYFRAME_SETTINGS.get("max_keyframes", 80)),
-        )
-        vf = (
-            f"crop={crop_w}:{crop_h}:x='{expr}':y=(ih-{crop_h})/2,"
-            f"scale={output_w}:{output_h}:flags=lanczos"
-        )
-        return _encode(input_path, output_path, _append_unsharp(vf, config), config, encoder)
+    """
+    Render híbrido robusto con geometría fija por segmento.
+
+    FFmpeg en Windows puede volverse inestable cuando `scale` cambia el tamaño
+    de salida en cada frame. Aquí el zoom se cuantiza en pequeños escalones y
+    cada tramo usa dimensiones fijas; todos los tramos terminan en 1080x1920 y
+    se concatenan después.
+    """
+    source_w, source_h = _probe_video_size(input_path)
+    if source_w <= 0 or source_h <= 0:
+        logger.warning("No se pudo obtener tamaño fuente para render híbrido")
+        return False
 
     positions = sorted(positions, key=lambda position: position[0])
     viewports = sorted(viewports, key=lambda viewport: viewport[0])
     max_keyframes = int(config.KEYFRAME_SETTINGS.get("max_keyframes", 80))
-    viewport_keyframes = min(max_keyframes, 36)
 
     center_positions = [
         (timestamp, x + crop_w / 2.0, critical)
@@ -207,46 +234,174 @@ def _process_hybrid_smart_crop(
         False,
         max_keyframes=max_keyframes,
     )
-    viewport_expr = _build_lerp(
+
+    segments, quant_step = _build_hybrid_segments(
         viewports,
-        False,
-        max_keyframes=viewport_keyframes,
+        crop_w,
+        source_w,
+        max_segments=28,
+    )
+    if not segments:
+        return False
+
+    logger.info(
+        "Render híbrido estable | segments=%d | zoom_step=%.1f%% | source=%dx%d",
+        len(segments),
+        quant_step * 100,
+        source_w,
+        source_h,
     )
 
-    safe_viewport = f"min({float(source_w):.3f},max({float(crop_w):.3f},{viewport_expr}))"
-    left_expr = (
-        f"max(0,min({float(source_w):.3f}-({safe_viewport}),"
-        f"({center_expr})-({safe_viewport})/2))"
+    graph_parts = []
+    outputs = []
+    for index, segment in enumerate(segments):
+        start = segment["start"]
+        end = segment["end"]
+        viewport_w = segment["viewport_width"]
+        trim = f"trim=start={start:.6f}"
+        if end is not None:
+            trim += f":end={end:.6f}"
+
+        source_label = f"segsrc{index}"
+        output_label = f"segout{index}"
+        graph_parts.append(f"[0:v]{trim}[{source_label}];")
+
+        if viewport_w <= crop_w * 1.015:
+            left_expr = (
+                f"max(0,min(iw-{float(crop_w):.3f},"
+                f"({center_expr})-{float(crop_w) / 2.0:.3f}))"
+            )
+            graph_parts.append(
+                f"[{source_label}]crop={crop_w}:{crop_h}:x='{left_expr}':"
+                f"y=(ih-{crop_h})/2,"
+                f"scale={output_w}:{output_h}:flags=lanczos,"
+                f"setsar=1,setpts=PTS-STARTPTS[{output_label}];"
+            )
+        else:
+            viewport_w = float(min(source_w, max(crop_w, viewport_w)))
+            scaled_w = _even_dimension(source_w * output_w / viewport_w)
+            scaled_h = _even_dimension(crop_h * output_w / viewport_w)
+            left_expr = (
+                f"max(0,min({float(source_w) - viewport_w:.3f},"
+                f"({center_expr})-{viewport_w / 2.0:.3f}))"
+            )
+            overlay_x = f"-({left_expr})*{float(output_w) / viewport_w:.10f}"
+
+            bg_label = f"bg{index}"
+            fg_label = f"fg{index}"
+            graph_parts.append(
+                f"[{source_label}]crop=iw:{crop_h}:0:(ih-{crop_h})/2,"
+                f"split=2[bgsrc{index}][fgsrc{index}];"
+                f"[bgsrc{index}]scale={output_w}:{output_h}:"
+                f"force_original_aspect_ratio=increase,"
+                f"crop={output_w}:{output_h},gblur=sigma=20,setsar=1[{bg_label}];"
+                f"[fgsrc{index}]scale={scaled_w}:{scaled_h}:flags=lanczos,"
+                f"setsar=1[{fg_label}];"
+                f"[{bg_label}][{fg_label}]overlay=x='{overlay_x}':"
+                f"y='(H-h)/2':eval=frame:shortest=1,"
+                f"setsar=1,setpts=PTS-STARTPTS[{output_label}];"
+            )
+
+        outputs.append(f"[{output_label}]")
+
+    concat_label = "hybridjoined"
+    graph_parts.append(
+        "".join(outputs)
+        + f"concat=n={len(outputs)}:v=1:a=0[{concat_label}];"
     )
-    scale_w = f"trunc(iw*{float(output_w):.3f}/({safe_viewport})/2)*2"
-    scale_h = f"trunc(ih*{float(output_w):.3f}/({safe_viewport})/2)*2"
-    overlay_x = f"-({left_expr})*{float(output_w):.3f}/({safe_viewport})"
 
     if config.ENCODING_SETTINGS.get("apply_unsharp", False):
-        foreground_tail = (
-            f"[fgscaled]unsharp={config.ENCODING_SETTINGS['unsharp_params']}[fg];"
+        graph_parts.append(
+            f"[{concat_label}]unsharp="
+            f"{config.ENCODING_SETTINGS['unsharp_params']}[vout]"
         )
     else:
-        foreground_tail = "[fgscaled]null[fg];"
-
-    vf = (
-        f"[0:v]crop=iw:{crop_h}:0:(ih-{crop_h})/2[base];"
-        f"[base]split=2[bgsrc][fgsrc];"
-        f"[bgsrc]scale={output_w}:{output_h}:force_original_aspect_ratio=increase,"
-        f"crop={output_w}:{output_h},gblur=sigma=20[bg];"
-        f"[fgsrc]scale=w='{scale_w}':h='{scale_h}':eval=frame:flags=lanczos[fgscaled];"
-        f"{foreground_tail}"
-        f"[bg][fg]overlay=x='{overlay_x}':y='(H-h)/2':eval=frame:shortest=1[vout]"
-    )
+        graph_parts.append(f"[{concat_label}]null[vout]")
 
     return _encode(
         input_path,
         output_path,
-        vf,
+        "".join(graph_parts),
         config,
         encoder,
         filter_complex=True,
     )
+
+
+def _build_hybrid_segments(
+    viewports,
+    crop_w: int,
+    source_w: int,
+    max_segments: int = 28,
+):
+    """Cuantiza el zoom suave a tramos estáticos para evitar reinit de `scale`."""
+    if not viewports or crop_w <= 0 or source_w <= 0:
+        return [], 0.0
+
+    ordered = sorted(viewports, key=lambda viewport: float(viewport[0]))
+    step = 0.05
+    segments = []
+
+    while step <= 0.20:
+        segments = _quantize_viewport_segments(ordered, crop_w, source_w, step)
+        if len(segments) <= max_segments:
+            break
+        step += 0.025
+
+    if len(segments) > max_segments:
+        indices = _evenly_spaced_indices(list(range(len(segments))), max_segments)
+        reduced = [segments[index].copy() for index in indices]
+        for index in range(len(reduced) - 1):
+            reduced[index]["end"] = reduced[index + 1]["start"]
+        reduced[-1]["end"] = None
+        segments = reduced
+
+    return segments, step
+
+
+def _quantize_viewport_segments(viewports, crop_w: int, source_w: int, step: float):
+    def quantize(width: float) -> float:
+        ratio = max(1.0, float(width) / float(crop_w))
+        if ratio <= 1.04:
+            quantized_ratio = 1.0
+        else:
+            quantized_ratio = 1.0 + math.ceil((ratio - 1.0) / step) * step
+        quantized_ratio = min(float(source_w) / float(crop_w), quantized_ratio)
+        return float(crop_w) * quantized_ratio
+
+    quantized = [(float(item[0]), quantize(float(item[1]))) for item in viewports]
+    if not quantized:
+        return []
+
+    segments = []
+    current_width = quantized[0][1]
+    current_start = 0.0
+
+    for index in range(1, len(quantized)):
+        timestamp, width = quantized[index]
+        if abs(width - current_width) < 0.5:
+            continue
+        previous_timestamp = quantized[index - 1][0]
+        boundary = max(current_start, (previous_timestamp + timestamp) / 2.0)
+        segments.append({
+            "start": current_start,
+            "end": boundary,
+            "viewport_width": current_width,
+        })
+        current_start = boundary
+        current_width = width
+
+    segments.append({
+        "start": current_start,
+        "end": None,
+        "viewport_width": current_width,
+    })
+    return segments
+
+
+def _even_dimension(value: float) -> int:
+    dimension = max(2, int(round(value)))
+    return dimension if dimension % 2 == 0 else dimension + 1
 
 
 def _prepare_hybrid_viewports(profile, positions, crop_w: int):
@@ -263,7 +418,6 @@ def _prepare_hybrid_viewports(profile, positions, crop_w: int):
     max_required_ratio = max(raw)
     stats["max_required_width"] = max_required_ratio * crop_w
 
-    # Si el sujeto cabe, el video sigue exactamente por el pipeline Smart Crop existente.
     if max_required_ratio <= 1.04:
         return [], stats
 
@@ -393,7 +547,11 @@ def _encode(
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        logger.error("FFmpeg falló | stderr=%s", (e.stderr or "")[-1500:])
+        logger.error(
+            "FFmpeg falló | code=%s | diagnostic=%s",
+            e.returncode,
+            _ffmpeg_error_summary(e.stderr or ""),
+        )
         return False
 
     if os.path.exists(output_path):
@@ -403,6 +561,28 @@ def _encode(
         )
         _log_video_info(output_path)
     return True
+
+
+def _ffmpeg_error_summary(stderr: str) -> str:
+    if not stderr:
+        return "sin stderr"
+
+    normalized = stderr.replace("\r", "\n")
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+    useful = []
+    for line in lines:
+        lower = line.lower()
+        if line.startswith("frame="):
+            continue
+        if any(token in lower for token in (
+            "error", "failed", "invalid", "cannot", "could not", "unable",
+            "conversion failed", "terminating", "nothing was written",
+        )):
+            useful.append(line)
+
+    selected = useful[-12:] if useful else lines[-12:]
+    text = " | ".join(selected)
+    return text[-5000:]
 
 
 def _normalize_position(position) -> Tuple[float, float, bool]:
@@ -490,7 +670,8 @@ def _reduce_positions_preserving_critical(
         selected_critical = _evenly_spaced_indices(critical_indices, slots)
         keep = {0, len(positions) - 1, *selected_critical}
         logger.warning(
-            "Demasiados keyframes críticos (%d) para el límite FFmpeg=%d; se priorizan de forma uniforme",
+            "Demasiados keyframes críticos (%d) para el límite FFmpeg=%d; "
+            "se priorizan de forma uniforme",
             len(mandatory),
             max_keyframes,
         )
