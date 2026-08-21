@@ -109,6 +109,7 @@ export function DashboardPage() {
   };
 
   const projects = projectsData?.data?.content || projectsData?.content || [];
+  const totalVideos = projects.reduce((acc, project) => acc + (project.videoCount || 0), 0);
 
   return (
     <Layout>
@@ -186,26 +187,57 @@ export function DashboardPage() {
 
         {/* Stats */}
         {projects.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="stat-card rounded-xl p-5">
-              <p className="text-3xl font-bold font-outfit text-foreground">{projects.length}</p>
-              <p className="text-sm text-muted-foreground mt-1">Proyectos</p>
+          <>
+            <section className="md:hidden rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm" aria-label="Resumen de la cuenta">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Resumen</p>
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
+                  Sistema activo
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-muted/45 p-3">
+                  <p className="font-outfit text-2xl font-bold leading-none text-foreground">{projects.length}</p>
+                  <p className="mt-1.5 text-xs text-muted-foreground">Proyectos</p>
+                </div>
+                <div className="rounded-xl bg-muted/45 p-3">
+                  <p className="font-outfit text-2xl font-bold leading-none text-foreground">{totalVideos}</p>
+                  <p className="mt-1.5 text-xs text-muted-foreground">Videos totales</p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-indigo-500/15 bg-indigo-500/[0.06] px-3 py-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-foreground">Procesamiento disponible</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">Listo para generar nuevas conversiones</p>
+                </div>
+              </div>
+            </section>
+
+            <div className="hidden md:grid md:grid-cols-4 gap-4 mb-4">
+              <div className="stat-card rounded-xl p-5">
+                <p className="text-3xl font-bold font-outfit text-foreground">{projects.length}</p>
+                <p className="text-sm text-muted-foreground mt-1">Proyectos</p>
+              </div>
+              <div className="stat-card rounded-xl p-5">
+                <p className="text-3xl font-bold font-outfit text-foreground">{totalVideos}</p>
+                <p className="text-sm text-muted-foreground mt-1">Videos totales</p>
+              </div>
+              <div className="stat-card rounded-xl p-5">
+                <p className="text-xl font-semibold font-outfit text-indigo-500">Disponible</p>
+                <p className="text-sm text-muted-foreground mt-1">Procesamiento</p>
+              </div>
+              <div className="stat-card rounded-xl p-5">
+                <p className="text-xl font-semibold font-outfit text-emerald-500">Activo</p>
+                <p className="text-sm text-muted-foreground mt-1">Estado</p>
+              </div>
             </div>
-            <div className="stat-card rounded-xl p-5">
-              <p className="text-3xl font-bold font-outfit text-foreground">
-                {projects.reduce((acc, p) => acc + (p.videoCount || 0), 0)}
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">Videos totales</p>
-            </div>
-            <div className="stat-card rounded-xl p-5">
-              <p className="text-3xl font-bold font-outfit gradient-text">∞</p>
-              <p className="text-sm text-muted-foreground mt-1">Conversiones</p>
-            </div>
-            <div className="stat-card rounded-xl p-5">
-              <p className="text-3xl font-bold font-outfit text-emerald-500">Activo</p>
-              <p className="text-sm text-muted-foreground mt-1">Estado</p>
-            </div>
-          </div>
+          </>
         )}
 
         {/* Projects Grid */}
