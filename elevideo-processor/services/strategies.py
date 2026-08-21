@@ -73,6 +73,7 @@ class ShortAutoStrategy(ProcessingStrategy):
     def process(self, local_input_path, request, config, detector, stabilizer, encoder, job_id, tracker):
         from processing.video_processor_enhanced import process_video_enhanced
         from services.segment_selector import SegmentSelector
+        from services.natural_segment_selector import NaturalSegmentSelector
         from services.segment_cutter import SegmentCutter
         from utils.validators import ShortOptionsValidator
 
@@ -87,7 +88,7 @@ class ShortAutoStrategy(ProcessingStrategy):
             video_duration=video_duration,
         )
 
-        start_time, actual_duration, selection_strategy = SegmentSelector.select_best_segment(
+        start_time, actual_duration, selection_strategy = NaturalSegmentSelector.select_best_segment(
             video_path=local_input_path,
             total_duration=video_duration,
             target_duration=request.short_auto_duration,
