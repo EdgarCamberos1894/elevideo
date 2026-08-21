@@ -1,6 +1,5 @@
 import logging
 import os
-import subprocess
 from typing import Callable, Optional
 
 import cloudinary
@@ -8,6 +7,7 @@ import cloudinary.api
 import cloudinary.uploader
 import requests
 
+from utils.cancellation_manager import JobCancelledException
 from utils.ffmpeg_progress import probe_duration_seconds, run_ffmpeg_with_progress
 
 logger = logging.getLogger(__name__)
@@ -34,23 +34,23 @@ class CloudinaryService:
         self._ensure_temp_dir()
         local_path = os.path.join(self.temp_dir, f"{job_id}_input.mp4")
         try:
-            response = requests.get(url, stream=True)
-            response.raise_for_status()
-            total_bytes = int(response.headers.get("Content-Length") or 0)
-            downloaded_bytes = 0
-            last_fraction = -1.0
+            with requests.get(url, stream=True) as response:
+                response.raise_for_status()
+                total_bytes = int(response.headers.get("Content-Length") or 0)
+                downloaded_bytes = 0
+                last_fraction = -1.0
 
-            with open(local_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=256 * 1024):
-                    if not chunk:
-                        continue
-                    f.write(chunk)
-                    downloaded_bytes += len(chunk)
-                    if progress_callback and total_bytes > 0:
-                        fraction = min(1.0, downloaded_bytes / total_bytes)
-                        if fraction >= 1.0 or fraction - last_fraction >= 0.01:
-                            last_fraction = fraction
-                            progress_callback(fraction)
+                with open(local_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=256 * 1024):
+                        if not chunk:
+                            continue
+                        f.write(chunk)
+                        downloaded_bytes += len(chunk)
+                        if progress_callback and total_bytes > 0:
+                            fraction = min(1.0, downloaded_bytes / total_bytes)
+                            if fraction >= 1.0 or fraction - last_fraction >= 0.01:
+                                last_fraction = fraction
+                                progress_callback(fraction)
 
             if progress_callback:
                 progress_callback(1.0)
@@ -58,6 +58,8 @@ class CloudinaryService:
             logger.info("Video descargado | job_id=%s | size=%.2fMB",
                         job_id, os.path.getsize(local_path) / (1024 * 1024))
             return local_path
+        except JobCancelledException:
+            raise
         except Exception as e:
             raise Exception(f"No se pudo descargar el video: {e}") from e
 
@@ -120,6 +122,8 @@ class CloudinaryService:
             logger.info("Video subido | job_id=%s | url=%s", job_id, video_url)
             return video_url
 
+        except JobCancelledException:
+            raise
         except Exception as e:
             raise Exception(f"No se pudo subir el video: {e}") from e
         finally:
@@ -230,6 +234,10 @@ class CloudinaryService:
 
                 os.remove(output_path)
 
+            except JobCancelledException:
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                raise
             except Exception as e:
                 logger.error("Compresión falló en intento %d | job_id=%s | %s", attempt + 1, job_id, e)
                 if os.path.exists(output_path):
