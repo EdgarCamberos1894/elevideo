@@ -52,21 +52,21 @@ import {
 
 const platformBadgeStyles = {
   tiktok: { label: 'TikTok', className: 'bg-black text-white border-0' },
-  instagram: { label: 'Instagram', className: 'bg-gradient-to-r from-pink-500 via-purple-500 to-orange-500 text-white border-0' },
-  instagram_reels: { label: 'Reels', className: 'bg-gradient-to-r from-pink-500 via-purple-500 to-orange-500 text-white border-0' },
-  youtube_shorts: { label: 'Shorts', className: 'bg-red-600 text-white border-0' },
+  instagram: { label: 'Instagram Reels', className: 'bg-gradient-to-r from-pink-500 via-purple-500 to-orange-500 text-white border-0' },
+  instagram_reels: { label: 'Instagram Reels', className: 'bg-gradient-to-r from-pink-500 via-purple-500 to-orange-500 text-white border-0' },
+  youtube_shorts: { label: 'YouTube Shorts', className: 'bg-red-600 text-white border-0' },
 };
 
 const qualityOptions = [
-  { value: 'fast', label: 'Rápido', desc: 'Menor calidad, más rápido' },
-  { value: 'normal', label: 'Normal', desc: 'Balance óptimo' },
-  { value: 'high', label: 'Alta calidad', desc: 'Mejor calidad, más lento' },
+  { value: 'fast', label: 'Rápida', desc: 'Procesa antes y genera un archivo más ligero.' },
+  { value: 'normal', label: 'Normal', desc: 'Balance recomendado entre detalle y tiempo.' },
+  { value: 'high', label: 'Alta calidad', desc: 'Más detalle y seguimiento más fino en Smart Crop.' },
 ];
 
 const backgroundModeOptions = [
-  { value: 'smart_crop', label: 'Recorte inteligente', desc: 'IA detecta el sujeto principal' },
-  { value: 'blurred', label: 'Fondo difuminado', desc: 'Video original como fondo blur' },
-  { value: 'black', label: 'Barras negras', desc: 'Fondo negro simple' },
+  { value: 'smart_crop', label: 'Recorte inteligente', desc: 'IA detecta y sigue al sujeto principal.' },
+  { value: 'blurred', label: 'Fondo difuminado', desc: 'Conserva todo el video con un fondo suave.' },
+  { value: 'black', label: 'Barras negras', desc: 'Conserva el encuadre original sin distracciones.' },
 ];
 
 const smartClipDurationModes = [
@@ -128,6 +128,7 @@ const jobPhaseLabels = {
 const ACTIVE_JOB_STATUSES = new Set(['pending', 'processing']);
 const isActiveJob = (job) => ACTIVE_JOB_STATUSES.has(job.status?.toLowerCase());
 const ACTIVE_JOB_POLL_INTERVAL_MS = 1800;
+const JOBS_VISIBLE_LIMIT = 10;
 const SHORT_MIN_DURATION_SECONDS = 5;
 const SHORT_MAX_DURATION_SECONDS = 180;
 
@@ -138,15 +139,15 @@ const processingModeLabels = {
 };
 
 const qualityLabels = {
-  fast: '⚡ Rápido',
-  normal: '⚖ Balance',
-  high: '⭐ Alta',
+  fast: 'Rápida',
+  normal: 'Normal',
+  high: 'Alta',
 };
 
 const backgroundLabels = {
   smart_crop: 'Recorte IA',
-  blurred: 'Fondo blur',
-  black: 'Fondo negro',
+  blurred: 'Fondo difuminado',
+  black: 'Barras negras',
 };
 
 function timeAgo(dateStr) {
@@ -173,6 +174,12 @@ function clampProgress(value) {
   const parsed = Number(value ?? 0);
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
+function getPlatformIcon(platform) {
+  if (platform === 'tiktok') return TikTokIcon;
+  if (platform === 'instagram' || platform === 'instagram_reels') return InstagramIcon;
+  return YouTubeIcon;
 }
 
 export function VideoPage() {
@@ -213,7 +220,7 @@ export function VideoPage() {
 
   const { data: jobsData, isLoading: jobsLoading } = useQuery({
     queryKey: ['jobs', projectId, videoId],
-    queryFn: () => processingApi.getJobs(projectId, videoId, { page: 0, size: 20 }),
+    queryFn: () => processingApi.getJobs(projectId, videoId, { page: 0, size: JOBS_VISIBLE_LIMIT }),
     refetchInterval: (query) => {
       const currentJobs = query.state.data?.data?.content || query.state.data?.content || [];
       return currentJobs.some(isActiveJob) ? ACTIVE_JOB_POLL_INTERVAL_MS : false;
@@ -357,10 +364,7 @@ export function VideoPage() {
       toast.error('La duración objetivo no puede superar la duración del video.');
       return;
     }
-    if (
-      processingMode === 'short_manual'
-      && shortDuration > selectedPlatformMaxDuration
-    ) {
+    if (processingMode === 'short_manual' && shortDuration > selectedPlatformMaxDuration) {
       toast.error(`La duración del clip no puede superar ${formatDuration(selectedPlatformMaxDuration)} para esta plataforma.`);
       return;
     }
@@ -385,30 +389,38 @@ export function VideoPage() {
   };
 
   const video = videoData?.data || videoData;
-  const jobs = jobsData?.data?.content || jobsData?.content || [];
+  const rawJobs = jobsData?.data?.content || jobsData?.content || [];
+  const jobs = rawJobs.slice(0, JOBS_VISIBLE_LIMIT);
+  const jobsTotal = Number(jobsData?.data?.totalElements ?? jobsData?.totalElements ?? jobs.length);
   const renditions = renditionsData?.data?.content || renditionsData?.content || [];
   const activeJobs = jobs.filter(isActiveJob);
 
+  const openRenditionPreview = (rendition) => {
+    setPreviewVideo(video);
+    setPreviewRendition(rendition);
+    setIsPreviewOpen(true);
+  };
+
   return (
     <Layout>
-      <div className="space-y-8" data-testid="video-page">
-        <div className="space-y-4">
+      <div className="space-y-6 sm:space-y-8" data-testid="video-page">
+        <div className="space-y-3 sm:space-y-4">
           <Link to={`/projects/${projectId}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group">
             <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
             Volver al proyecto
           </Link>
           {videoLoading ? <Skeleton className="h-10 w-64" /> : (
-            <h1 className="font-outfit text-4xl font-bold tracking-tight">{video?.title}</h1>
+            <h1 className="font-outfit text-3xl sm:text-4xl font-bold tracking-tight break-words">{video?.title}</h1>
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start lg:gap-8">
+          <section className="order-1 space-y-5 lg:col-span-2 lg:col-start-1 lg:row-start-1 lg:space-y-6">
             {videoLoading ? (
               <Skeleton className="aspect-video w-full rounded-2xl" />
             ) : video?.videoUrl ? (
               <div className="relative aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl">
-                <video src={video.videoUrl} controls className="w-full h-full" data-testid="video-player" poster={video.thumbnailUrl} />
+                <video src={video.videoUrl} controls className="w-full h-full object-contain" data-testid="video-player" poster={video.thumbnailUrl} />
               </div>
             ) : (
               <div className="aspect-video bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center">
@@ -417,157 +429,41 @@ export function VideoPage() {
             )}
 
             {video && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 {[
                   { label: 'Duración', value: formatDuration(video.durationInSeconds) },
                   { label: 'Resolución', value: `${video.width}×${video.height}` },
                   { label: 'Formato', value: (video.format || 'MP4').toUpperCase() },
                   { label: 'Estado', value: video.status, isStatus: true },
                 ].map((item) => (
-                  <div key={item.label} className="stat-card rounded-xl p-4">
-                    <p className="text-sm text-muted-foreground">{item.label}</p>
-                    <p className={`font-semibold font-outfit ${item.isStatus ? 'text-green-500' : ''}`}>{item.value}</p>
+                  <div key={item.label} className="stat-card rounded-xl p-3 sm:p-4">
+                    <p className="text-xs sm:text-sm text-muted-foreground">{item.label}</p>
+                    <p className={`font-semibold font-outfit text-sm sm:text-base truncate ${item.isStatus ? 'text-green-500' : ''}`}>{item.value}</p>
                   </div>
                 ))}
               </div>
             )}
+          </section>
 
-            <div ref={resultsSectionRef}>
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="w-full grid grid-cols-2 h-12 p-1 bg-muted/50">
-                  <TabsTrigger value="renditions" className="data-[state=active]:bg-background" data-testid="renditions-tab">
-                    <Smartphone className="mr-2 h-4 w-4" />Videos procesados ({renditions.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="jobs" className="data-[state=active]:bg-background" data-testid="jobs-tab">
-                    <Clock className="mr-2 h-4 w-4" />Jobs {activeJobs.length > 0 && `(${activeJobs.length} activos)`}
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="renditions" className="space-y-4">
-                  {renditionsLoading ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                      {[...Array(3)].map((_, i) => <Skeleton key={i} className="aspect-[9/16] rounded-xl" />)}
-                    </div>
-                  ) : renditions.length === 0 ? (
-                    <Card className="text-center py-12 border-dashed border-2">
-                      <CardContent className="space-y-4">
-                        <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 flex items-center justify-center">
-                          <Smartphone className="h-8 w-8 text-purple-500" />
-                        </div>
-                        <div>
-                          <h3 className="font-outfit font-semibold text-lg">No hay videos procesados</h3>
-                          <p className="text-muted-foreground text-sm">Usa el panel de la derecha para convertir tu video</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                      {renditions.map((rendition) => {
-                        const platformBadge = platformBadgeStyles[rendition.platform] ?? { label: rendition.platform, className: 'bg-muted text-white' };
-                        const modeLabel = processingModeLabels[rendition.processingMode] ?? rendition.processingMode;
-                        const qualityLabel = qualityLabels[rendition.quality] ?? rendition.quality;
-                        const bgLabel = backgroundLabels[rendition.backgroundMode] ?? rendition.backgroundMode;
-                        const PlatformIcon = rendition.platform === 'tiktok' ? TikTokIcon : rendition.platform === 'instagram' ? InstagramIcon : YouTubeIcon;
-                        return (
-                          <Card key={rendition.id} className="overflow-hidden border-border/50 group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col">
-                            <div className="relative aspect-[9/16] bg-black overflow-hidden">
-                              {rendition.thumbnailUrl && <img src={rendition.thumbnailUrl} alt="thumbnail" className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-0" />}
-                              {rendition.previewUrl && <video src={rendition.previewUrl} muted loop playsInline autoPlay className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300" />}
-                              <div className={`absolute top-2 left-2 backdrop-blur rounded-full p-1.5 ${platformBadge.className}`} title={platformBadge.label}>
-                                <PlatformIcon className="h-4 w-4 text-white" />
-                              </div>
-                              <Button size="icon" variant="destructive" className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition" onClick={() => { setSelectedRendition(rendition); setIsDeleteRenditionOpen(true); }}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                              <button type="button" className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition" onClick={() => { setPreviewVideo(video); setPreviewRendition(rendition); setIsPreviewOpen(true); }}>
-                                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow"><Play className="h-5 w-5 text-black ml-0.5" /></div>
-                              </button>
-                            </div>
-                            <CardContent className="p-3 flex flex-col gap-2 flex-1">
-                              <div className="text-sm font-semibold leading-tight">{modeLabel}</div>
-                              {rendition.segmentDuration && <div className="text-xs text-muted-foreground">{formatDuration(rendition.segmentStart)} → {formatDuration(rendition.segmentStart + rendition.segmentDuration)}</div>}
-                              <div className="flex flex-wrap gap-1 text-[11px]"><Badge variant="outline">{qualityLabel}</Badge><Badge variant="outline">{bgLabel}</Badge></div>
-                              {rendition.createdAt && <div className="text-[11px] text-muted-foreground">{timeAgo(rendition.createdAt)}</div>}
-                              <div className="flex gap-2 mt-auto">
-                                <Button size="sm" className="flex-1" onClick={() => { setPreviewVideo(video); setPreviewRendition(rendition); setIsPreviewOpen(true); }}><Eye className="h-3 w-3 mr-1" />Ver</Button>
-                                {rendition.outputUrl && <Button asChild size="sm" variant="secondary"><a href={rendition.outputUrl} download><Download className="h-3 w-3" /></a></Button>}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="jobs" className="space-y-4">
-                  {jobsLoading ? (
-                    <div className="space-y-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
-                  ) : jobs.length === 0 ? (
-                    <Card className="text-center py-12 border-dashed border-2">
-                      <CardContent className="space-y-4">
-                        <div className="w-16 h-16 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center"><Clock className="h-8 w-8 text-blue-500" /></div>
-                        <div><h3 className="font-outfit font-semibold text-lg">No hay jobs</h3><p className="text-muted-foreground text-sm">Los jobs aparecerán aquí cuando proceses un video</p></div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className="space-y-3">
-                      {jobs.map((job) => {
-                        const normalizedStatus = job.status?.toLowerCase();
-                        const status = jobStatusConfig[normalizedStatus] || jobStatusConfig.pending;
-                        const StatusIcon = status.icon;
-                        const progressValue = clampProgress(job.progress);
-                        const remainingValue = Math.max(0, 100 - progressValue);
-                        const phaseLabel = jobPhaseLabels[job.phase] || (normalizedStatus === 'pending' ? 'Esperando turno' : 'Procesando video');
-                        const modeLabel = processingModeLabels[job.processingMode] ?? job.processingMode;
-                        return (
-                          <Card key={job.id || job.jobId} className="border-border/50" data-testid={`job-${job.id || job.jobId}`}>
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-4 min-w-0">
-                                  <div className={`p-2 rounded-lg ${status.className}`}><StatusIcon className={`h-5 w-5 ${normalizedStatus === 'processing' ? 'animate-spin' : ''}`} /></div>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap"><Badge className={`${status.className} border font-medium`}>{status.label}</Badge><span className="text-sm font-medium">{modeLabel}</span></div>
-                                    <p className="text-xs text-muted-foreground mt-1">ID: {(job.id || job.jobId).slice(0, 8)}...</p>
-                                  </div>
-                                </div>
-                                {isActiveJob(job) && <Button variant="outline" size="sm" onClick={() => cancelJobMutation.mutate(job.id || job.jobId)} disabled={cancelJobMutation.isPending} className="text-destructive hover:text-destructive shrink-0"><XCircle className="mr-2 h-4 w-4" />Cancelar</Button>}
-                              </div>
-                              {normalizedStatus === 'processing' && (
-                                <div className="mt-4 space-y-2.5">
-                                  <div className="flex items-end justify-between gap-4">
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium truncate">{phaseLabel}</p>
-                                      <p className="text-[11px] text-muted-foreground">{remainingValue}% restante</p>
-                                    </div>
-                                    <span className="font-outfit text-lg font-semibold tabular-nums">{progressValue}%</span>
-                                  </div>
-                                  <Progress value={progressValue} className="h-2.5" aria-label={`Progreso ${progressValue}%`} />
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <Card className="border-border/50 bg-card dark:bg-card/95 shadow-xl sticky top-24 overflow-hidden">
+          <aside className="order-2 lg:col-start-3 lg:row-start-1 lg:row-span-2">
+            <Card className="border-border/50 bg-card dark:bg-card/95 shadow-xl overflow-hidden lg:sticky lg:top-24">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-purple-500/20"><Wand2 className="h-5 w-5 text-white" /></div>
-                  <div><CardTitle className="font-outfit text-lg">Procesar video</CardTitle><CardDescription className="text-xs">Convierte a formato vertical 9:16</CardDescription></div>
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-purple-500/20">
+                    <Wand2 className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <CardTitle className="font-outfit text-lg">Procesar video</CardTitle>
+                    <CardDescription className="text-xs">Configura el resultado de arriba hacia abajo</CardDescription>
+                  </div>
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-5">
                 <div className="space-y-2.5">
-                  <Label className="text-sm font-medium">Modo de conversión</Label>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-sm font-medium">1. ¿Qué quieres crear?</Label>
+                  </div>
                   <div className="grid gap-2">
                     {[
                       { value: 'vertical', label: 'Video completo', desc: 'Procesa todo el video', icon: '📹' },
@@ -584,10 +480,10 @@ export function VideoPage() {
                             onClick={() => { if (!isUnavailableShortMode) setProcessingMode(mode.value); }}
                             className={`w-full p-3 pr-11 rounded-xl text-left transition-all flex items-center gap-3 ${isUnavailableShortMode ? 'bg-muted/30 border-2 border-transparent opacity-50 cursor-not-allowed' : processingMode === mode.value ? 'bg-indigo-500/10 border-2 border-indigo-500/50 dark:bg-indigo-500/20' : 'bg-muted/50 border-2 border-transparent hover:bg-muted hover:border-border'}`}
                           >
-                            <span className="text-xl">{mode.icon}</span>
-                            <div>
+                            <span className="text-xl shrink-0">{mode.icon}</span>
+                            <div className="min-w-0">
                               <p className={`font-medium text-sm ${processingMode === mode.value && !isUnavailableShortMode ? 'text-indigo-600 dark:text-indigo-400' : ''}`}>{mode.label}</p>
-                              <p className="text-xs text-muted-foreground">{isUnavailableShortMode ? `Requiere un video de al menos ${SHORT_MIN_DURATION_SECONDS}s` : mode.desc}</p>
+                              <p className="text-xs text-muted-foreground leading-relaxed">{isUnavailableShortMode ? `Requiere un video de al menos ${SHORT_MIN_DURATION_SECONDS}s` : mode.desc}</p>
                             </div>
                           </button>
                           <ProcessingHelpPopover topic={mode.value} className="absolute right-2 top-2 z-10 bg-background/70 backdrop-blur-sm" />
@@ -597,49 +493,11 @@ export function VideoPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2.5">
-                  <Label className="text-sm font-medium">Plataforma</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { value: 'tiktok', label: 'TikTok', icon: TikTokIcon, activeColor: 'from-[#ff0050] to-[#00f2ea]' },
-                      { value: 'instagram', label: 'Reels', icon: InstagramIcon, activeColor: 'from-[#833ab4] via-[#fd1d1d] to-[#fcb045]' },
-                      { value: 'youtube_shorts', label: 'Shorts', icon: YouTubeIcon, activeColor: 'from-[#ff0000] to-[#cc0000]' },
-                    ].map((p) => (
-                      <button key={p.value} type="button" onClick={() => setPlatform(p.value)} className={`p-3 rounded-xl text-center transition-all flex flex-col items-center gap-1.5 ${platform === p.value ? `bg-gradient-to-br ${p.activeColor} shadow-lg text-white` : 'bg-muted/50 border border-border hover:bg-muted text-muted-foreground hover:text-foreground'}`}>
-                        <p.icon className="h-5 w-5" /><p className="font-medium text-xs">{p.label}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1">
-                      <Label className="text-xs font-medium">Calidad</Label>
-                      <ProcessingHelpPopover topic="quality" />
-                    </div>
-                    <Select value={quality} onValueChange={setQuality}>
-                      <SelectTrigger className="h-9 text-sm" data-testid="quality-select"><SelectValue /></SelectTrigger>
-                      <SelectContent>{qualityOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1">
-                      <Label className="text-xs font-medium">Fondo</Label>
-                      <ProcessingHelpPopover topic="backgrounds" />
-                    </div>
-                    <Select value={backgroundMode} onValueChange={setBackgroundMode}>
-                      <SelectTrigger className="h-9 text-sm" data-testid="background-mode-select"><SelectValue /></SelectTrigger>
-                      <SelectContent>{backgroundModeOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
                 {processingMode === 'short_auto' && (
                   <div className="space-y-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <Label className="text-sm font-medium">Duración del clip</Label>
+                        <Label className="text-sm font-medium">2. Duración del clip</Label>
                         <p className="text-[11px] text-muted-foreground mt-0.5">También influye en cómo EleVideo decide el cierre.</p>
                       </div>
                       {shortAutoDurationMode === 'auto' && (
@@ -683,7 +541,9 @@ export function VideoPage() {
                         {shortAutoDurationMode === 'approximate' && (
                           <p className="text-[11px] leading-relaxed text-muted-foreground">EleVideo puede mover el final unos segundos antes o después para favorecer silencios, cambios de escena o una caída natural de actividad.</p>
                         )}
-                        {hasVideoDuration && videoDurationSeconds < selectedPlatformMaxDuration && <p className="text-[10px] text-center text-muted-foreground">Máximo ajustado a la duración del video: {formatDuration(videoDurationSeconds)}</p>}
+                        {hasVideoDuration && videoDurationSeconds < selectedPlatformMaxDuration && (
+                          <p className="text-[10px] text-center text-muted-foreground">Máximo ajustado a la duración del video: {formatDuration(videoDurationSeconds)}</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -691,8 +551,11 @@ export function VideoPage() {
 
                 {processingMode === 'short_manual' && (
                   <div className="space-y-3 p-4 rounded-xl bg-sky-500/10 border border-sky-500/20">
-                    <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400"><Scissors className="h-4 w-4" /><span className="text-sm font-medium">Configurar corte</span></div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
+                      <Scissors className="h-4 w-4" />
+                      <span className="text-sm font-medium">2. Configurar corte</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Inicio (seg)</Label>
                         <Input type="number" value={shortStartTime} onChange={(e) => handleShortStartTimeChange(e.target.value)} min={0} max={maxManualStartTime} step={1} className="h-9 text-center" data-testid="short-start-time-input" />
@@ -710,8 +573,55 @@ export function VideoPage() {
                   </div>
                 )}
 
+                <div className="space-y-2.5">
+                  <Label className="text-sm font-medium">{processingMode === 'vertical' ? '2' : '3'}. Plataforma</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'tiktok', label: 'TikTok', icon: TikTokIcon, activeColor: 'from-[#ff0050] to-[#00f2ea]' },
+                      { value: 'instagram', label: 'Reels', icon: InstagramIcon, activeColor: 'from-[#833ab4] via-[#fd1d1d] to-[#fcb045]' },
+                      { value: 'youtube_shorts', label: 'Shorts', icon: YouTubeIcon, activeColor: 'from-[#ff0000] to-[#cc0000]' },
+                    ].map((p) => (
+                      <button key={p.value} type="button" onClick={() => setPlatform(p.value)} className={`p-3 rounded-xl text-center transition-all flex flex-col items-center gap-1.5 ${platform === p.value ? `bg-gradient-to-br ${p.activeColor} shadow-lg text-white` : 'bg-muted/50 border border-border hover:bg-muted text-muted-foreground hover:text-foreground'}`}>
+                        <p.icon className="h-5 w-5" />
+                        <p className="font-medium text-xs">{p.label}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">{processingMode === 'vertical' ? '3' : '4'}. Acabado</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3">
+                      <div className="flex items-center gap-1">
+                        <Label className="text-xs font-medium">Calidad</Label>
+                        <ProcessingHelpPopover topic="quality" />
+                      </div>
+                      <Select value={quality} onValueChange={setQuality}>
+                        <SelectTrigger className="h-9 text-sm" data-testid="quality-select"><SelectValue /></SelectTrigger>
+                        <SelectContent>{qualityOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                      <p className="text-[10px] leading-relaxed text-muted-foreground">{qualityOptions.find((opt) => opt.value === quality)?.desc}</p>
+                    </div>
+                    <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3">
+                      <div className="flex items-center gap-1">
+                        <Label className="text-xs font-medium">Encuadre</Label>
+                        <ProcessingHelpPopover topic="backgrounds" />
+                      </div>
+                      <Select value={backgroundMode} onValueChange={setBackgroundMode}>
+                        <SelectTrigger className="h-9 text-sm" data-testid="background-mode-select"><SelectValue /></SelectTrigger>
+                        <SelectContent>{backgroundModeOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                      <p className="text-[10px] leading-relaxed text-muted-foreground">{backgroundModeOptions.find((opt) => opt.value === backgroundMode)?.desc}</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 cursor-pointer hover:bg-muted transition-all" onClick={() => setShowAdvanced(!showAdvanced)}>
-                  <div className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-muted-foreground" /><Label className="cursor-pointer text-sm">Opciones avanzadas</Label></div>
+                  <div className="flex items-center gap-2">
+                    <Settings2 className="h-4 w-4 text-muted-foreground" />
+                    <Label className="cursor-pointer text-sm">Opciones avanzadas</Label>
+                  </div>
                   <Switch checked={showAdvanced} onCheckedChange={setShowAdvanced} data-testid="advanced-options-toggle" />
                 </div>
 
@@ -723,19 +633,213 @@ export function VideoPage() {
                 )}
 
                 <Button className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all text-base font-semibold rounded-xl" onClick={handleProcess} disabled={processMutation.isPending || ((processingMode === 'short_auto' || processingMode === 'short_manual') && shortModesDisabled)} data-testid="process-video-button">
-                  {processMutation.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Sparkles className="mr-2 h-5 w-5" />}Convertir a vertical
+                  {processMutation.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Sparkles className="mr-2 h-5 w-5" />}
+                  Convertir a vertical
                 </Button>
                 <p className="text-center text-[10px] text-muted-foreground">El procesamiento puede tardar unos minutos</p>
               </CardContent>
             </Card>
-          </div>
+          </aside>
+
+          <section ref={resultsSectionRef} className="order-3 min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-2">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5 sm:space-y-6">
+              <TabsList className="w-full grid grid-cols-2 h-12 p-1 bg-muted/50">
+                <TabsTrigger value="renditions" className="data-[state=active]:bg-background min-w-0 px-2 sm:px-3" data-testid="renditions-tab">
+                  <Smartphone className="mr-1.5 sm:mr-2 h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline truncate">Videos procesados ({renditions.length})</span>
+                  <span className="sm:hidden truncate">Resultados ({renditions.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="jobs" className="data-[state=active]:bg-background min-w-0 px-2 sm:px-3" data-testid="jobs-tab">
+                  <Clock className="mr-1.5 sm:mr-2 h-4 w-4 shrink-0" />
+                  <span className="truncate">Jobs{activeJobs.length > 0 ? ` · ${activeJobs.length} activo${activeJobs.length === 1 ? '' : 's'}` : ''}</span>
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="renditions" className="space-y-4">
+                {renditionsLoading ? (
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-[220px] rounded-2xl" />)}
+                  </div>
+                ) : renditions.length === 0 ? (
+                  <Card className="text-center py-12 border-dashed border-2">
+                    <CardContent className="space-y-4">
+                      <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 flex items-center justify-center">
+                        <Smartphone className="h-8 w-8 text-purple-500" />
+                      </div>
+                      <div>
+                        <h3 className="font-outfit font-semibold text-lg">No hay videos procesados</h3>
+                        <p className="text-muted-foreground text-sm">Configura el procesamiento de arriba y genera tu primer resultado.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    {renditions.map((rendition, index) => {
+                      const platformBadge = platformBadgeStyles[rendition.platform] ?? { label: rendition.platform || 'Plataforma', className: 'bg-muted text-foreground border-border' };
+                      const modeLabel = processingModeLabels[rendition.processingMode] ?? rendition.processingMode ?? 'Video procesado';
+                      const qualityLabel = qualityLabels[rendition.quality] ?? rendition.quality ?? 'Normal';
+                      const bgLabel = backgroundLabels[rendition.backgroundMode] ?? rendition.backgroundMode ?? 'Encuadre';
+                      const PlatformIcon = getPlatformIcon(rendition.platform);
+                      const hasSegment = rendition.segmentDuration !== null && rendition.segmentDuration !== undefined;
+
+                      return (
+                        <Card key={rendition.id} className="overflow-hidden border-border/60 bg-card/80 transition-all duration-300 hover:border-indigo-500/25 hover:shadow-lg">
+                          <div className="grid grid-cols-[112px_minmax(0,1fr)] sm:grid-cols-[140px_minmax(0,1fr)]">
+                            <button
+                              type="button"
+                              onClick={() => openRenditionPreview(rendition)}
+                              className="group/preview relative aspect-[9/16] w-full overflow-hidden bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+                              aria-label={`Ver ${modeLabel}`}
+                            >
+                              {rendition.thumbnailUrl ? (
+                                <img src={rendition.thumbnailUrl} alt={`Vista previa de ${modeLabel}`} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover/preview:scale-[1.03]" />
+                              ) : rendition.previewUrl ? (
+                                <video src={rendition.previewUrl} muted playsInline preload="metadata" className="absolute inset-0 h-full w-full object-cover" />
+                              ) : (
+                                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-slate-800 to-black">
+                                  <Film className="h-9 w-9 text-white/25" />
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10" />
+                              <div className={`absolute left-2 top-2 rounded-full p-1.5 shadow-sm ${platformBadge.className}`} title={platformBadge.label}>
+                                <PlatformIcon className="h-3.5 w-3.5 text-current" />
+                              </div>
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow-lg transition-transform group-hover/preview:scale-110">
+                                  <Play className="h-4.5 w-4.5 ml-0.5 text-black" />
+                                </div>
+                              </div>
+                            </button>
+
+                            <CardContent className="min-w-0 p-3.5 sm:p-4 flex flex-col gap-3">
+                              <div className="space-y-1.5">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <span className="font-medium text-foreground/80">{platformBadge.label}</span>
+                                      {index === 0 && <Badge variant="secondary" className="h-5 px-1.5 text-[9px]">Más reciente</Badge>}
+                                    </div>
+                                    <h3 className="font-outfit font-semibold text-base leading-tight mt-1">{modeLabel}</h3>
+                                  </div>
+                                  {rendition.createdAt && <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo(rendition.createdAt)}</span>}
+                                </div>
+                                {hasSegment ? (
+                                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <Scissors className="h-3.5 w-3.5" />
+                                    <span>{formatDuration(rendition.segmentStart)} → {formatDuration(Number(rendition.segmentStart || 0) + Number(rendition.segmentDuration || 0))}</span>
+                                    <span className="text-foreground/40">·</span>
+                                    <span>{formatDuration(rendition.segmentDuration)}</span>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">Video completo en formato vertical</p>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap gap-1.5">
+                                <Badge variant="outline" className="font-normal text-[10px] sm:text-[11px]">{qualityLabel}</Badge>
+                                <Badge variant="outline" className="font-normal text-[10px] sm:text-[11px]">{bgLabel}</Badge>
+                              </div>
+
+                              <div className="mt-auto grid grid-cols-[1fr_auto_auto] gap-2 pt-1">
+                                <Button size="sm" className="min-w-0" onClick={() => openRenditionPreview(rendition)}>
+                                  <Eye className="h-3.5 w-3.5 mr-1.5" />Ver resultado
+                                </Button>
+                                {rendition.outputUrl && (
+                                  <Button asChild size="sm" variant="secondary" title="Descargar">
+                                    <a href={rendition.outputUrl} download aria-label="Descargar video procesado"><Download className="h-3.5 w-3.5" /></a>
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-destructive hover:text-destructive"
+                                  title="Eliminar"
+                                  aria-label="Eliminar video procesado"
+                                  onClick={() => { setSelectedRendition(rendition); setIsDeleteRenditionOpen(true); }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="jobs" className="space-y-4">
+                {jobsLoading ? (
+                  <div className="space-y-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+                ) : jobs.length === 0 ? (
+                  <Card className="text-center py-12 border-dashed border-2">
+                    <CardContent className="space-y-4">
+                      <div className="w-16 h-16 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center"><Clock className="h-8 w-8 text-blue-500" /></div>
+                      <div><h3 className="font-outfit font-semibold text-lg">No hay jobs</h3><p className="text-muted-foreground text-sm">Los jobs aparecerán aquí cuando proceses un video</p></div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-3">
+                    {jobs.map((job) => {
+                      const normalizedStatus = job.status?.toLowerCase();
+                      const status = jobStatusConfig[normalizedStatus] || jobStatusConfig.pending;
+                      const StatusIcon = status.icon;
+                      const progressValue = clampProgress(job.progress);
+                      const remainingValue = Math.max(0, 100 - progressValue);
+                      const phaseLabel = jobPhaseLabels[job.phase] || (normalizedStatus === 'pending' ? 'Esperando turno' : 'Procesando video');
+                      const modeLabel = processingModeLabels[job.processingMode] ?? job.processingMode;
+                      return (
+                        <Card key={job.id || job.jobId} className="border-border/50" data-testid={`job-${job.id || job.jobId}`}>
+                          <CardContent className="p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                <div className={`p-2 rounded-lg shrink-0 ${status.className}`}><StatusIcon className={`h-5 w-5 ${normalizedStatus === 'processing' ? 'animate-spin' : ''}`} /></div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap"><Badge className={`${status.className} border font-medium`}>{status.label}</Badge><span className="text-sm font-medium">{modeLabel}</span></div>
+                                  <p className="text-xs text-muted-foreground mt-1">ID: {(job.id || job.jobId).slice(0, 8)}...</p>
+                                </div>
+                              </div>
+                              {isActiveJob(job) && (
+                                <Button variant="outline" size="sm" onClick={() => cancelJobMutation.mutate(job.id || job.jobId)} disabled={cancelJobMutation.isPending} className="text-destructive hover:text-destructive w-full sm:w-auto shrink-0">
+                                  <XCircle className="mr-2 h-4 w-4" />Cancelar
+                                </Button>
+                              )}
+                            </div>
+                            {normalizedStatus === 'processing' && (
+                              <div className="mt-4 space-y-2.5">
+                                <div className="flex items-end justify-between gap-4">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium truncate">{phaseLabel}</p>
+                                    <p className="text-[11px] text-muted-foreground">{remainingValue}% restante</p>
+                                  </div>
+                                  <span className="font-outfit text-lg font-semibold tabular-nums">{progressValue}%</span>
+                                </div>
+                                <Progress value={progressValue} className="h-2.5" aria-label={`Progreso ${progressValue}%`} />
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                    {jobsTotal > JOBS_VISIBLE_LIMIT && (
+                      <p className="text-center text-xs text-muted-foreground pt-1">Mostrando los {JOBS_VISIBLE_LIMIT} jobs más recientes de {jobsTotal}.</p>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </section>
         </div>
 
         <VideoPreviewModal isOpen={isPreviewOpen} onClose={() => { setIsPreviewOpen(false); setPreviewRendition(null); }} video={previewVideo} rendition={previewRendition} />
 
         <AlertDialog open={isDeleteRenditionOpen} onOpenChange={setIsDeleteRenditionOpen}>
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>¿Eliminar video procesado?</AlertDialogTitle><AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar video procesado?</AlertDialogTitle>
+              <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+            </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction onClick={() => deleteRenditionMutation.mutate(selectedRendition?.id)} className="bg-destructive hover:bg-destructive/90">
