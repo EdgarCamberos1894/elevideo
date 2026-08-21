@@ -195,6 +195,103 @@
   }
 }
 
+/*
+ * Dashboard dark-mode surface hierarchy
+ * Keep this unlayered so the scoped surface overrides take precedence over
+ * Tailwind utility classes without changing the global theme tokens.
+ */
+.dark .dashboard-bg {
+  background-color: rgb(7 12 24);
+  background-image:
+    radial-gradient(at 92% 2%, rgb(79 70 229 / 0.16) 0, transparent 34%),
+    radial-gradient(at 8% 92%, rgb(37 99 235 / 0.1) 0, transparent 36%),
+    linear-gradient(180deg, rgb(7 12 24) 0%, rgb(5 10 20) 100%);
+}
+
+.dark [data-testid="dashboard-page"] > details,
+.dark [data-testid="dashboard-page"] > details + div {
+  border-color: rgb(71 85 105 / 0.78);
+  background: linear-gradient(145deg, rgb(30 41 59 / 0.9), rgb(15 23 42 / 0.96));
+  box-shadow: 0 18px 42px -30px rgb(0 0 0 / 0.95);
+}
+
+.dark [data-testid="dashboard-page"] > details > div {
+  border-color: rgb(71 85 105 / 0.55);
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) {
+  border-color: rgb(71 85 105 / 0.82);
+  background: linear-gradient(145deg, rgb(15 23 42 / 0.98), rgb(13 20 38 / 0.98));
+  box-shadow:
+    0 30px 74px -44px rgb(0 0 0 / 0.98),
+    0 16px 40px -28px rgb(79 70 229 / 0.34),
+    inset 0 1px 0 rgb(255 255 255 / 0.035);
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(2) {
+  border-color: rgb(71 85 105 / 0.68);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(99 102 241 / 0.13), transparent 34%),
+    linear-gradient(145deg, rgb(30 41 59 / 0.9), rgb(15 23 42 / 0.98));
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(2) > div:first-child > span {
+  border-color: rgb(100 116 139 / 0.65);
+  background: rgb(30 41 59 / 0.96);
+  color: rgb(226 232 240);
+  box-shadow: 0 8px 20px -16px rgb(0 0 0 / 0.9);
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(2) > div:nth-child(2) {
+  border-color: rgb(71 85 105 / 0.85);
+  background: rgb(2 6 23 / 0.72);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.025),
+    inset 0 16px 30px -28px rgb(0 0 0 / 0.95);
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(2) > div:nth-child(2) input,
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(2) > div:nth-child(2) [role="combobox"] {
+  border-color: rgb(100 116 139 / 0.9);
+  background: rgb(30 41 59 / 0.94);
+  color: rgb(241 245 249);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.035),
+    0 7px 18px -14px rgb(0 0 0 / 0.95);
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(2) > div:nth-child(2) input:hover,
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(2) > div:nth-child(2) [role="combobox"]:hover {
+  border-color: rgb(129 140 248 / 0.72);
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(3) {
+  border-color: rgb(51 65 85 / 0.86);
+  background:
+    radial-gradient(circle at 50% 0%, rgb(99 102 241 / 0.055), transparent 30%),
+    rgb(3 8 19 / 0.88);
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(3) > .grid > a > div,
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(3) > .grid > div {
+  border-color: rgb(71 85 105 / 0.9);
+  background: linear-gradient(145deg, rgb(30 41 59 / 0.98), rgb(15 23 42 / 0.98));
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.025),
+    0 18px 40px -30px rgb(0 0 0 / 0.98);
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) > div:nth-child(3) > .grid > a:hover > div {
+  border-color: rgb(129 140 248 / 0.65);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.04),
+    0 22px 48px -30px rgb(79 70 229 / 0.48);
+}
+
+.dark [data-testid="dashboard-page"] section:has(#projects-library-title) nav {
+  border-color: rgb(71 85 105 / 0.62);
+}
+
 html {
   scroll-behavior: smooth;
 }
