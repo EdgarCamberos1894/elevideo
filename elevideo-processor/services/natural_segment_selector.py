@@ -14,15 +14,14 @@ logger = logging.getLogger(__name__)
 
 _AUTO_MIN_DURATION_SECONDS = 20
 _AUTO_IDEAL_MIN_SECONDS = 30
-_AUTO_IDEAL_MAX_SECONDS = 50
-_AUTO_DURATION_STEP_SECONDS = 2
+_AUTO_IDEAL_MAX_SECONDS = 60
+_AUTO_SHORT_STEP_SECONDS = 2
+_AUTO_LONG_STEP_SECONDS = 5
 _APPROX_MIN_TOLERANCE_SECONDS = 3
 _APPROX_MAX_TOLERANCE_SECONDS = 6
 _COARSE_TOP_STARTS_PER_ANCHOR = 4
 _MAX_DISCOVERY_STARTS = 10
 
-# La señal de interés sigue mandando. El cierre natural recibe suficiente peso
-# para poder vencer a una ventana apenas más intensa que termine de forma abrupta.
 _CONTENT_SCORE_WEIGHT = 0.80
 _END_QUALITY_WEIGHT = 0.14
 _DURATION_PREFERENCE_WEIGHT = 0.06
@@ -37,11 +36,18 @@ class NaturalSegmentSelector:
         total_duration: float,
         target_duration: Optional[int],
         duration_mode: str = "exact",
+        max_duration_seconds: int = SHORT_MAX_DURATION_SECONDS,
         detector=None,
         config=None,
     ) -> Tuple[float, int, str]:
         mode = _normalize_duration_mode(duration_mode)
-        fallback_duration = _fallback_duration(total_duration, target_duration, mode)
+        platform_max = _normalize_max_duration(max_duration_seconds)
+        fallback_duration = _fallback_duration(
+            total_duration,
+            target_duration,
+            mode,
+            platform_max,
+        )
 
         if total_duration <= SHORT_MIN_DURATION_SECONDS:
             return 0.0, fallback_duration, "full_video"
@@ -58,6 +64,7 @@ class NaturalSegmentSelector:
                 total_duration=total_duration,
                 target_duration=target_duration,
                 duration_mode=mode,
+                max_duration_seconds=platform_max,
                 detector=detector,
                 config=config,
             )
@@ -78,6 +85,7 @@ class NaturalSegmentSelector:
         total_duration: float,
         target_duration: Optional[int],
         duration_mode: str,
+        max_duration_seconds: int,
         detector=None,
         config=None,
     ) -> Tuple[float, int, str]:
@@ -107,8 +115,9 @@ class NaturalSegmentSelector:
                 )
 
         logger.info(
-            "Smart Clip v3 signals | mode=%s | audio=%d | silences=%d | scenes=%d | faces=%d | visual_activity=%d",
+            "Smart Clip v3 signals | mode=%s | max_duration=%ds | audio=%d | silences=%d | scenes=%d | faces=%d | visual_activity=%d",
             duration_mode,
+            max_duration_seconds,
             len(audio_scores),
             len(silences) if silences is not None else 0,
             len(scene_cuts),
@@ -125,14 +134,25 @@ class NaturalSegmentSelector:
             total_duration=total_duration,
             target_duration=target_duration,
             duration_mode=duration_mode,
+            max_duration_seconds=max_duration_seconds,
         )
         if not durations:
-            fallback_duration = _fallback_duration(total_duration, target_duration, duration_mode)
+            fallback_duration = _fallback_duration(
+                total_duration,
+                target_duration,
+                duration_mode,
+                max_duration_seconds,
+            )
             start, duration = SegmentSelector._central_segment(total_duration, fallback_duration)
             return start, duration, f"central_fallback_v3_{duration_mode}"
 
         if not (has_face_signal or has_audio_signal or has_visual_signal or has_boundaries):
-            fallback_duration = _fallback_duration(total_duration, target_duration, duration_mode)
+            fallback_duration = _fallback_duration(
+                total_duration,
+                target_duration,
+                duration_mode,
+                max_duration_seconds,
+            )
             start, duration = SegmentSelector._central_segment(total_duration, fallback_duration)
             logger.info(
                 "Smart Clip v3 sin señales útiles | mode=%s | start=%.2fs | duration=%ds",
@@ -142,9 +162,6 @@ class NaturalSegmentSelector:
             )
             return start, duration, f"central_fallback_no_signals_v3_{duration_mode}"
 
-        # Discovery eficiente: recorremos todo el video solo con 1-3 duraciones
-        # ancla. Después las duraciones posibles compiten alrededor de las zonas
-        # fuertes descubiertas, evitando multiplicar el costo por ~20 ventanas.
         discovery_starts = _discover_promising_starts(
             total_duration=total_duration,
             durations=durations,
@@ -158,7 +175,12 @@ class NaturalSegmentSelector:
         )
 
         if not discovery_starts:
-            fallback_duration = _fallback_duration(total_duration, target_duration, duration_mode)
+            fallback_duration = _fallback_duration(
+                total_duration,
+                target_duration,
+                duration_mode,
+                max_duration_seconds,
+            )
             start, duration = SegmentSelector._central_segment(total_duration, fallback_duration)
             return start, duration, f"central_fallback_v3_{duration_mode}"
 
@@ -199,11 +221,17 @@ class NaturalSegmentSelector:
                         audio_scores=audio_scores,
                         visual_scores=visual_scores,
                         total_duration=total_duration,
+                        max_duration_seconds=max_duration_seconds,
                     )
                 )
 
         if not evaluated_segments:
-            fallback_duration = _fallback_duration(total_duration, target_duration, duration_mode)
+            fallback_duration = _fallback_duration(
+                total_duration,
+                target_duration,
+                duration_mode,
+                max_duration_seconds,
+            )
             start, duration = SegmentSelector._central_segment(total_duration, fallback_duration)
             return start, duration, f"central_fallback_v3_{duration_mode}"
 
@@ -272,8 +300,6 @@ def _discover_promising_starts(
             ]
         )
 
-    # Deduplicamos zonas casi iguales para que la segunda etapa explore más
-    # regiones reales del video en vez de diez variantes del mismo segundo.
     ranked = sorted(discovered, key=lambda item: item["score"], reverse=True)
     starts: List[float] = []
     for entry in ranked:
@@ -302,7 +328,7 @@ def _anchor_durations(
         values = [durations[0], min(durations, key=lambda value: abs(value - target)), durations[-1]]
         return sorted(set(values))
 
-    preferred = min(durations, key=lambda value: abs(value - 40))
+    preferred = min(durations, key=lambda value: abs(value - 45))
     return sorted(set([durations[0], preferred, durations[-1]]))
 
 
@@ -316,6 +342,7 @@ def _decorate_segment(
     audio_scores: dict,
     visual_scores: dict,
     total_duration: float,
+    max_duration_seconds: int,
 ) -> dict:
     start = float(entry["start"])
     end_quality = _end_quality_score(
@@ -330,6 +357,7 @@ def _decorate_segment(
         duration=duration,
         target_duration=target_duration,
         duration_mode=duration_mode,
+        max_duration_seconds=max_duration_seconds,
     )
     content_score = float(entry["score"])
     natural_score = (
@@ -352,8 +380,12 @@ def _duration_candidates(
     total_duration: float,
     target_duration: Optional[int],
     duration_mode: str,
+    max_duration_seconds: int,
 ) -> List[int]:
-    max_duration = min(SHORT_MAX_DURATION_SECONDS, int(math.floor(total_duration)))
+    max_duration = min(
+        _normalize_max_duration(max_duration_seconds),
+        int(math.floor(total_duration)),
+    )
     if max_duration < SHORT_MIN_DURATION_SECONDS:
         return []
 
@@ -370,9 +402,14 @@ def _duration_candidates(
             return [max(SHORT_MIN_DURATION_SECONDS, min(target, max_duration))]
         return list(range(low, high + 1))
 
-    low = min(_AUTO_MIN_DURATION_SECONDS, max_duration)
-    low = max(SHORT_MIN_DURATION_SECONDS, low)
-    durations = list(range(low, max_duration + 1, _AUTO_DURATION_STEP_SECONDS))
+    low = max(SHORT_MIN_DURATION_SECONDS, min(_AUTO_MIN_DURATION_SECONDS, max_duration))
+    compact_high = min(_AUTO_IDEAL_MAX_SECONDS, max_duration)
+    durations = list(range(low, compact_high + 1, _AUTO_SHORT_STEP_SECONDS))
+
+    if max_duration > compact_high:
+        long_start = compact_high + _AUTO_LONG_STEP_SECONDS
+        durations.extend(range(long_start, max_duration + 1, _AUTO_LONG_STEP_SECONDS))
+
     if max_duration not in durations:
         durations.append(max_duration)
     return sorted(set(durations))
@@ -382,6 +419,7 @@ def _duration_preference(
     duration: int,
     target_duration: Optional[int],
     duration_mode: str,
+    max_duration_seconds: int,
 ) -> float:
     if duration_mode == "exact":
         return 1.0
@@ -390,7 +428,6 @@ def _duration_preference(
         target = int(target_duration or 30)
         tolerance = max(1, _approx_tolerance(target))
         distance_ratio = min(1.0, abs(duration - target) / tolerance)
-        # El borde de la tolerancia sigue siendo válido; solo pierde un 20%.
         return 1.0 - 0.20 * distance_ratio
 
     if _AUTO_IDEAL_MIN_SECONDS <= duration <= _AUTO_IDEAL_MAX_SECONDS:
@@ -400,8 +437,9 @@ def _duration_preference(
         ratio = (duration - _AUTO_MIN_DURATION_SECONDS) / span
         return max(0.75, min(1.0, 0.75 + 0.25 * ratio))
 
-    span = max(1, SHORT_MAX_DURATION_SECONDS - _AUTO_IDEAL_MAX_SECONDS)
-    ratio = (SHORT_MAX_DURATION_SECONDS - duration) / span
+    effective_max = max(_AUTO_IDEAL_MAX_SECONDS + 1, _normalize_max_duration(max_duration_seconds))
+    span = max(1, effective_max - _AUTO_IDEAL_MAX_SECONDS)
+    ratio = (effective_max - duration) / span
     return max(0.75, min(1.0, 0.75 + 0.25 * ratio))
 
 
@@ -418,7 +456,6 @@ def _end_quality_score(
 
     end_boundaries = list(scene_cuts)
     if silences:
-        # Terminar justo antes de una pausa suele sentirse como cierre de frase o beat.
         end_boundaries.extend(silence_start for silence_start, _ in silences)
 
     boundary_score = _boundary_proximity(end, end_boundaries, window=2.0) if end_boundaries else 0.5
@@ -461,16 +498,20 @@ def _fallback_duration(
     total_duration: float,
     target_duration: Optional[int],
     duration_mode: str,
+    max_duration_seconds: int,
 ) -> int:
     max_duration = max(
         SHORT_MIN_DURATION_SECONDS,
-        min(SHORT_MAX_DURATION_SECONDS, int(math.floor(total_duration))),
+        min(
+            _normalize_max_duration(max_duration_seconds),
+            int(math.floor(total_duration)),
+        ),
     )
 
     if duration_mode == "auto":
         if total_duration <= _AUTO_MIN_DURATION_SECONDS:
             return max_duration
-        return min(40, max_duration)
+        return min(45, max_duration)
 
     target = int(target_duration or 30)
     return max(SHORT_MIN_DURATION_SECONDS, min(target, max_duration))
@@ -491,6 +532,17 @@ def _normalize_duration_mode(duration_mode: str) -> str:
         logger.warning("duration_mode desconocido '%s'; usando exact", duration_mode)
         return "exact"
     return normalized
+
+
+def _normalize_max_duration(max_duration_seconds: int) -> int:
+    try:
+        value = int(max_duration_seconds)
+    except (TypeError, ValueError):
+        value = SHORT_MAX_DURATION_SECONDS
+    return max(
+        SHORT_MIN_DURATION_SECONDS,
+        min(SHORT_MAX_DURATION_SECONDS, value),
+    )
 
 
 def _signal_label(

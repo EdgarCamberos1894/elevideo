@@ -88,6 +88,12 @@ const smartClipDurationModes = [
   },
 ];
 
+const platformShortMaxDurations = {
+  tiktok: 180,
+  instagram: 180,
+  youtube_shorts: 180,
+};
+
 const jobStatusConfig = {
   pending: { label: 'En cola', icon: Clock, className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' },
   processing: { label: 'Procesando', icon: RefreshCw, className: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
@@ -99,7 +105,7 @@ const jobStatusConfig = {
 const ACTIVE_JOB_STATUSES = new Set(['pending', 'processing']);
 const isActiveJob = (job) => ACTIVE_JOB_STATUSES.has(job.status?.toLowerCase());
 const SHORT_MIN_DURATION_SECONDS = 5;
-const SHORT_MAX_DURATION_SECONDS = 60;
+const SHORT_MAX_DURATION_SECONDS = 180;
 
 const processingModeLabels = {
   vertical: 'Video completo',
@@ -195,19 +201,20 @@ export function VideoPage() {
     Math.floor(Number(videoData?.data?.durationInSeconds ?? videoData?.durationInSeconds ?? 0)),
   );
   const hasVideoDuration = videoDurationSeconds > 0;
+  const selectedPlatformMaxDuration = platformShortMaxDurations[platform] ?? SHORT_MAX_DURATION_SECONDS;
   const shortModesDisabled = hasVideoDuration && videoDurationSeconds < SHORT_MIN_DURATION_SECONDS;
   const shortAutoMaxDuration = hasVideoDuration
-    ? Math.min(SHORT_MAX_DURATION_SECONDS, Math.max(SHORT_MIN_DURATION_SECONDS, videoDurationSeconds))
-    : SHORT_MAX_DURATION_SECONDS;
+    ? Math.min(selectedPlatformMaxDuration, Math.max(SHORT_MIN_DURATION_SECONDS, videoDurationSeconds))
+    : selectedPlatformMaxDuration;
   const maxManualStartTime = hasVideoDuration
     ? Math.max(0, videoDurationSeconds - SHORT_MIN_DURATION_SECONDS)
     : 0;
   const manualRemainingDuration = hasVideoDuration
     ? Math.max(0, videoDurationSeconds - shortStartTime)
-    : SHORT_MAX_DURATION_SECONDS;
+    : selectedPlatformMaxDuration;
   const shortManualMaxDuration = Math.max(
     SHORT_MIN_DURATION_SECONDS,
-    Math.min(SHORT_MAX_DURATION_SECONDS, Math.floor(manualRemainingDuration)),
+    Math.min(selectedPlatformMaxDuration, Math.floor(manualRemainingDuration)),
   );
 
   const handleShortStartTimeChange = (rawValue) => {
@@ -304,12 +311,27 @@ export function VideoPage() {
       return;
     }
     if (
+      processingMode === 'short_auto'
+      && shortAutoDurationMode !== 'auto'
+      && shortAutoDuration > selectedPlatformMaxDuration
+    ) {
+      toast.error(`La duración objetivo no puede superar ${formatDuration(selectedPlatformMaxDuration)} para esta plataforma.`);
+      return;
+    }
+    if (
       hasVideoDuration
       && processingMode === 'short_auto'
       && shortAutoDurationMode !== 'auto'
       && shortAutoDuration > videoDurationSeconds
     ) {
       toast.error('La duración objetivo no puede superar la duración del video.');
+      return;
+    }
+    if (
+      processingMode === 'short_manual'
+      && shortDuration > selectedPlatformMaxDuration
+    ) {
+      toast.error(`La duración del clip no puede superar ${formatDuration(selectedPlatformMaxDuration)} para esta plataforma.`);
       return;
     }
     if (hasVideoDuration && processingMode === 'short_manual' && shortStartTime + shortDuration > videoDurationSeconds) {
@@ -603,7 +625,7 @@ export function VideoPage() {
 
                     {shortAutoDurationMode === 'auto' ? (
                       <div className="rounded-lg border border-amber-500/20 bg-background/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                        Prioriza clips de <span className="font-medium text-foreground">30–50 s</span>, pero puede elegir entre <span className="font-medium text-foreground">20–60 s</span> si encuentra un inicio y un cierre más naturales.
+                        Prioriza clips de <span className="font-medium text-foreground">30–60 s</span>, pero puede extenderse hasta <span className="font-medium text-foreground">{formatDuration(shortAutoMaxDuration)}</span> si el contenido necesita más tiempo para cerrar de forma natural.
                       </div>
                     ) : (
                       <div className="space-y-2.5 pt-1">
@@ -612,11 +634,11 @@ export function VideoPage() {
                           <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-bold">{shortAutoDuration}s</span>
                         </div>
                         <Slider value={[shortAutoDuration]} onValueChange={([v]) => setShortAutoDuration(v)} min={SHORT_MIN_DURATION_SECONDS} max={shortAutoMaxDuration} step={1} className="py-1" data-testid="short-duration-slider" />
-                        <div className="flex justify-between text-[10px] text-muted-foreground"><span>{SHORT_MIN_DURATION_SECONDS}s</span><span>{shortAutoMaxDuration}s</span></div>
+                        <div className="flex justify-between text-[10px] text-muted-foreground"><span>{SHORT_MIN_DURATION_SECONDS}s</span><span>{formatDuration(shortAutoMaxDuration)}</span></div>
                         {shortAutoDurationMode === 'approximate' && (
                           <p className="text-[11px] leading-relaxed text-muted-foreground">EleVideo puede mover el final unos segundos antes o después para favorecer silencios, cambios de escena o una caída natural de actividad.</p>
                         )}
-                        {hasVideoDuration && videoDurationSeconds < SHORT_MAX_DURATION_SECONDS && <p className="text-[10px] text-center text-muted-foreground">Máximo ajustado a la duración del video: {formatDuration(videoDurationSeconds)}</p>}
+                        {hasVideoDuration && videoDurationSeconds < selectedPlatformMaxDuration && <p className="text-[10px] text-center text-muted-foreground">Máximo ajustado a la duración del video: {formatDuration(videoDurationSeconds)}</p>}
                       </div>
                     )}
                   </div>
@@ -634,11 +656,11 @@ export function VideoPage() {
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Duración</Label>
                         <div className="h-9 px-3 rounded-md bg-muted flex items-center justify-center"><span className="font-medium text-sm">{shortDuration}s</span></div>
-                        <p className="text-[10px] text-center text-muted-foreground">Máx. disponible: {shortManualMaxDuration}s</p>
+                        <p className="text-[10px] text-center text-muted-foreground">Máx. disponible: {formatDuration(shortManualMaxDuration)}</p>
                       </div>
                     </div>
                     <Slider value={[shortDuration]} onValueChange={([v]) => setShortDuration(v)} min={SHORT_MIN_DURATION_SECONDS} max={shortManualMaxDuration} step={1} data-testid="short-manual-duration-slider" />
-                    <div className="flex justify-between text-[10px] text-muted-foreground"><span>Mín. {SHORT_MIN_DURATION_SECONDS}s</span><span>Máx. {shortManualMaxDuration}s</span></div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground"><span>Mín. {SHORT_MIN_DURATION_SECONDS}s</span><span>Máx. {formatDuration(shortManualMaxDuration)}</span></div>
                     <div className="text-center text-xs text-muted-foreground">Resultado: {formatDuration(shortStartTime)} → {formatDuration(shortStartTime + shortDuration)}</div>
                   </div>
                 )}

@@ -9,6 +9,7 @@ import com.elevideo.backend.processing.internal.mapper.VideoProcessingMapper;
 import com.elevideo.backend.processing.internal.mapper.VideoRenditionMapper;
 import com.elevideo.backend.processing.internal.model.JobLifecycleGroup;
 import com.elevideo.backend.processing.internal.model.JobStatus;
+import com.elevideo.backend.processing.internal.model.PlatformShortLimits;
 import com.elevideo.backend.processing.internal.model.ProcessingJob;
 import com.elevideo.backend.processing.internal.model.ProcessingMode;
 import com.elevideo.backend.processing.internal.model.ShortAutoDurationMode;
@@ -66,7 +67,6 @@ class ProcessingServiceImpl implements ProcessingService {
         job.setVideoId(videoId);
         jobRepository.save(job);
 
-        // Construimos statusUrl para que el frontend pueda iniciar polling sin construir URLs
         String statusUrl = baseUrl + "/jobs/" + pythonResponse.jobId();
 
         return new VideoJobCreatedResponse(
@@ -76,7 +76,6 @@ class ProcessingServiceImpl implements ProcessingService {
                 statusUrl
         );
     }
-
 
     @Override
     @Transactional
@@ -200,14 +199,6 @@ class ProcessingServiceImpl implements ProcessingService {
         return new JobOverviewResponse(active, finished);
     }
 
-    // ----------------------------------------------------------------
-    // Helpers privados
-    // ----------------------------------------------------------------
-
-    /**
-     * Verifica que el video exista y pertenezca al usuario autenticado.
-     * Lanza NotFoundException o ForbiddenException si no se cumple.
-     */
     private void assertVideoAccess(Long videoId) {
         UUID userId = currentUserProvider.getCurrentUserId();
         videoService.assertVideoOwnedByUser(videoId, userId);
@@ -230,6 +221,7 @@ class ProcessingServiceImpl implements ProcessingService {
         }
 
         double videoDuration = durationInSeconds.doubleValue();
+        int platformMaxDuration = PlatformShortLimits.maxDurationSeconds(request.platform());
 
         if (request.processingMode() == ProcessingMode.SHORT_AUTO) {
             ShortAutoDurationMode durationMode = request.shortAutoDurationMode() == null
@@ -242,7 +234,17 @@ class ProcessingServiceImpl implements ProcessingService {
                         "Debes indicar la duración objetivo cuando el modo es aproximado o exacto."
                 );
             }
-            if (requestedDuration != null && requestedDuration > videoDuration) {
+            if (requestedDuration != null && requestedDuration > platformMaxDuration) {
+                throw new InvalidClipRangeException(
+                        "La duración objetivo no puede superar los " + platformMaxDuration
+                                + " segundos para la plataforma seleccionada."
+                );
+            }
+            if (
+                    durationMode != ShortAutoDurationMode.AUTO
+                            && requestedDuration != null
+                            && requestedDuration > videoDuration
+            ) {
                 throw new InvalidClipRangeException(
                         "La duración objetivo no puede superar los " + durationInSeconds + " segundos del video."
                 );
@@ -254,6 +256,12 @@ class ProcessingServiceImpl implements ProcessingService {
             VideoProcessRequest.ShortManualOptions options = request.shortOptions();
             if (options == null) {
                 throw new InvalidClipRangeException("Debes indicar el inicio y la duración del short manual.");
+            }
+            if (options.duration() > platformMaxDuration) {
+                throw new InvalidClipRangeException(
+                        "La duración del clip no puede superar los " + platformMaxDuration
+                                + " segundos para la plataforma seleccionada."
+                );
             }
 
             double clipEnd = options.startTime() + options.duration();
@@ -269,10 +277,6 @@ class ProcessingServiceImpl implements ProcessingService {
         return jobRepository.findByJobIdAndVideoId(jobId, videoId)
                 .orElseThrow(() -> new JobNotFoundException(jobId));
     }
-
-    // ----------------------------------------------------------------
-    // Excepciones internas
-    // ----------------------------------------------------------------
 
     static class JobNotFoundException extends NotFoundException {
         JobNotFoundException(String jobId) { super("Job not found: " + jobId); }

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 
 SHORT_MIN_DURATION_SECONDS: int     = 5
-SHORT_MAX_DURATION_SECONDS: int     = 60
+SHORT_MAX_DURATION_SECONDS: int     = 180
 SHORT_DEFAULT_DURATION_SECONDS: int = 30
 
 
@@ -16,6 +16,20 @@ class Platform(str, Enum):
     tiktok         = "tiktok"
     instagram      = "instagram"
     youtube_shorts = "youtube_shorts"
+
+
+PLATFORM_SHORT_MAX_DURATION_SECONDS: dict[Platform, int] = {
+    Platform.tiktok: 180,
+    Platform.instagram: 180,
+    Platform.youtube_shorts: 180,
+}
+
+
+def get_platform_short_max_duration(platform: Platform | None) -> int:
+    return PLATFORM_SHORT_MAX_DURATION_SECONDS.get(
+        platform,
+        SHORT_MAX_DURATION_SECONDS,
+    )
 
 
 class BackgroundMode(str, Enum):
@@ -50,7 +64,6 @@ class JobStatus(str, Enum):
     cancelled  = "cancelled"
 
 
-# Mapeos de valores de usuario a valores internos de config
 QUALITY_TO_PRESET: dict = {
     QualityLevel.fast:   "fast",
     QualityLevel.normal: "balanced",
@@ -181,8 +194,6 @@ class ShortManualRequest(BaseVideoRequest):
     }
 
 
-# Union discriminada — único tipo que el endpoint y los validators deben importar.
-# Pydantic resuelve el modelo concreto leyendo el campo `processing_mode`.
 VideoProcessRequest = Annotated[
     Union[VerticalRequest, ShortAutoRequest, ShortManualRequest],
     Field(discriminator="processing_mode"),
