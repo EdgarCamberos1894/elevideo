@@ -65,8 +65,9 @@ class ProcessingGuardrails:
                 ),
             )
 
+        day_cutoff = now - timedelta(days=1)
+        self._cleanup_user_histories(day_cutoff)
         user_history = self._user_requests[user_key]
-        self._trim(user_history, now - timedelta(days=1))
         self._trim(self._global_requests, now - timedelta(minutes=1))
 
         minute_count = _count_since(user_history, now - timedelta(minutes=1))
@@ -120,6 +121,12 @@ class ProcessingGuardrails:
             removed += 1
 
         return removed
+
+    def _cleanup_user_histories(self, cutoff: datetime) -> None:
+        for user_key, history in list(self._user_requests.items()):
+            self._trim(history, cutoff)
+            if not history:
+                self._user_requests.pop(user_key, None)
 
     @staticmethod
     def _trim(history: Deque[datetime], cutoff: datetime) -> None:
