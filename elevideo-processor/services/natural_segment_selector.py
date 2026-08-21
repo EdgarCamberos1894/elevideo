@@ -5,7 +5,9 @@ from typing import List, Optional, Tuple
 from models.schemas import SHORT_MIN_DURATION_SECONDS, SHORT_MAX_DURATION_SECONDS
 from services.segment_selector import (
     SegmentSelector,
+    _active_audio_ratio,
     _boundary_proximity,
+    _count_cuts,
     _has_meaningful_signal,
     _window_avg,
 )
@@ -26,9 +28,18 @@ _CONTENT_SCORE_WEIGHT = 0.80
 _END_QUALITY_WEIGHT = 0.14
 _DURATION_PREFERENCE_WEIGHT = 0.06
 
+# Después de encontrar el mejor núcleo, Smart Clip puede conservar exactamente
+# el mismo final y retroceder unos segundos si ese contexto prepara mejor la
+# acción. La extensión nunca se aplica a duración Exacta.
+_LEAD_IN_OFFSETS_SECONDS = (2, 4, 6, 8)
+_LEAD_IN_MIN_CONTEXT_SCORE = 0.60
+_LEAD_IN_MAX_NATURAL_SCORE_DROP = 0.055
+_LEAD_IN_BONUS_WEIGHT = 0.07
+_LEAD_IN_MAX_LENGTH_PENALTY = 0.008
+
 
 class NaturalSegmentSelector:
-    """Selector v3 que optimiza conjuntamente inicio y duración del Short Auto."""
+    """Selector v3.1: optimiza inicio, duración, cierre y contexto previo útil."""
 
     @staticmethod
     def select_best_segment(
@@ -236,6 +247,24 @@ class NaturalSegmentSelector:
             return start, duration, f"central_fallback_v3_{duration_mode}"
 
         best = max(evaluated_segments, key=lambda item: item["natural_score"])
+        lead_in_applied = False
+
+        if duration_mode in {"auto", "approximate"}:
+            contextual = _select_contextual_lead_in(
+                core=best,
+                target_duration=target_duration,
+                duration_mode=duration_mode,
+                max_duration_seconds=max_duration_seconds,
+                total_duration=total_duration,
+                audio_scores=audio_scores,
+                visual_scores=visual_scores,
+                face_scores=face_scores,
+                scene_cuts=scene_cuts,
+                silences=silences,
+            )
+            if contextual is not None:
+                best = contextual
+                lead_in_applied = True
 
         signal_label = _signal_label(
             has_face_signal=has_face_signal,
@@ -244,9 +273,11 @@ class NaturalSegmentSelector:
             has_boundaries=has_boundaries,
         )
         strategy = f"smart_auto_v3_{duration_mode}_{signal_label}"
+        if lead_in_applied:
+            strategy += "_contextual_lead_in"
 
         logger.info(
-            "Smart Clip v3 seleccionado | start=%.2fs | end=%.2fs | duration=%ds | mode=%s | content=%.3f | end_quality=%.3f | duration_pref=%.3f | score=%.3f | strategy=%s",
+            "Smart Clip v3 seleccionado | start=%.2fs | end=%.2fs | duration=%ds | mode=%s | content=%.3f | end_quality=%.3f | duration_pref=%.3f | lead_in=%.3f | score=%.3f | strategy=%s",
             best["start"],
             best["start"] + best["duration"],
             best["duration"],
@@ -254,6 +285,7 @@ class NaturalSegmentSelector:
             best["content_score"],
             best["end_quality"],
             best["duration_preference"],
+            best.get("lead_in_context", 0.0),
             best["natural_score"],
             strategy,
         )
@@ -374,6 +406,215 @@ def _decorate_segment(
         "duration_preference": duration_preference,
         "natural_score": max(0.0, min(1.0, natural_score)),
     }
+
+
+def _select_contextual_lead_in(
+    core: dict,
+    target_duration: Optional[int],
+    duration_mode: str,
+    max_duration_seconds: int,
+    total_duration: float,
+    audio_scores: dict,
+    visual_scores: dict,
+    face_scores: dict,
+    scene_cuts: List[float],
+    silences: Optional[List[Tuple[float, float]]],
+) -> Optional[dict]:
+    """Conserva el cierre del núcleo y busca una entrada previa que lo prepare mejor."""
+    core_start = float(core["start"])
+    core_duration = int(core["duration"])
+    core_end = core_start + core_duration
+    platform_max = min(
+        _normalize_max_duration(max_duration_seconds),
+        int(math.floor(total_duration)),
+    )
+
+    best_contextual: Optional[dict] = None
+    best_selection_score = float(core["natural_score"])
+
+    for offset in _LEAD_IN_OFFSETS_SECONDS:
+        if core_start < offset:
+            continue
+
+        duration = core_duration + offset
+        if duration > platform_max:
+            continue
+        if duration_mode == "approximate" and not _duration_allowed_for_approximate(
+            duration,
+            target_duration,
+            platform_max,
+        ):
+            continue
+
+        start = round(core_end - duration, 3)
+        if start < 0.0:
+            continue
+
+        _, _, detail = SegmentSelector._score_candidates(
+            candidates=[start],
+            target_duration=duration,
+            audio_scores=audio_scores,
+            visual_scores=visual_scores,
+            scene_cuts=scene_cuts,
+            face_scores=face_scores,
+            silences=silences,
+            log_top=False,
+        )
+        if not detail:
+            continue
+
+        candidate = _decorate_segment(
+            entry=detail[0],
+            duration=duration,
+            target_duration=target_duration,
+            duration_mode=duration_mode,
+            scene_cuts=scene_cuts,
+            silences=silences,
+            audio_scores=audio_scores,
+            visual_scores=visual_scores,
+            total_duration=total_duration,
+            max_duration_seconds=max_duration_seconds,
+        )
+        context_score = _lead_in_context_score(
+            extended_start=start,
+            core_start=core_start,
+            face_scores=face_scores,
+            audio_scores=audio_scores,
+            visual_scores=visual_scores,
+            scene_cuts=scene_cuts,
+            silences=silences,
+        )
+        natural_drop = float(core["natural_score"]) - float(candidate["natural_score"])
+        if context_score < _LEAD_IN_MIN_CONTEXT_SCORE:
+            continue
+        if natural_drop > _LEAD_IN_MAX_NATURAL_SCORE_DROP:
+            continue
+
+        context_bonus = _LEAD_IN_BONUS_WEIGHT * max(
+            0.0,
+            min(1.0, (context_score - 0.5) / 0.5),
+        )
+        length_penalty = _LEAD_IN_MAX_LENGTH_PENALTY * (
+            offset / max(_LEAD_IN_OFFSETS_SECONDS)
+        )
+        selection_score = candidate["natural_score"] + context_bonus - length_penalty
+
+        logger.debug(
+            "Smart Clip lead-in | offset=%ds | start=%.2fs | duration=%ds | natural=%.3f | context=%.3f | adjusted=%.3f",
+            offset,
+            start,
+            duration,
+            candidate["natural_score"],
+            context_score,
+            selection_score,
+        )
+
+        if selection_score > best_selection_score + 0.002:
+            candidate["lead_in_context"] = context_score
+            candidate["lead_in_offset"] = offset
+            candidate["lead_in_selection_score"] = selection_score
+            best_contextual = candidate
+            best_selection_score = selection_score
+
+    if best_contextual is not None:
+        logger.info(
+            "Smart Clip contexto previo aceptado | offset=%ds | core_start=%.2fs | start=%.2fs | end=%.2fs | context=%.3f | adjusted=%.3f",
+            best_contextual["lead_in_offset"],
+            core_start,
+            best_contextual["start"],
+            core_end,
+            best_contextual["lead_in_context"],
+            best_contextual["lead_in_selection_score"],
+        )
+
+    return best_contextual
+
+
+def _lead_in_context_score(
+    extended_start: float,
+    core_start: float,
+    face_scores: dict,
+    audio_scores: dict,
+    visual_scores: dict,
+    scene_cuts: List[float],
+    silences: Optional[List[Tuple[float, float]]],
+) -> float:
+    lead_duration = max(0.0, core_start - extended_start)
+    if lead_duration <= 0.0:
+        return 0.0
+
+    meaningful_signals = [
+        scores
+        for scores in (face_scores, audio_scores, visual_scores)
+        if _has_meaningful_signal(scores)
+    ]
+    if meaningful_signals:
+        lead_activity = sum(
+            _window_avg(scores, extended_start, lead_duration)
+            for scores in meaningful_signals
+        ) / len(meaningful_signals)
+        core_window = min(3.0, max(1.0, lead_duration))
+        core_activity = sum(
+            _window_avg(scores, core_start, core_window)
+            for scores in meaningful_signals
+        ) / len(meaningful_signals)
+    else:
+        lead_activity = 0.5
+        core_activity = 0.5
+
+    # El lead-in debe tener vida propia, pero es positivo que la actividad
+    # aumente al entrar al núcleo: preparación -> acción.
+    rise = max(-1.0, min(1.0, core_activity - lead_activity))
+    ramp_score = 0.5 + 0.5 * rise
+
+    active_audio = (
+        _active_audio_ratio(silences, extended_start, lead_duration)
+        if silences is not None
+        else 0.65
+    )
+
+    cuts = _count_cuts(scene_cuts, extended_start, lead_duration)
+    if cuts == 0:
+        continuity = 1.0
+    elif cuts == 1:
+        continuity = 0.85
+    elif cuts == 2:
+        continuity = 0.55
+    else:
+        continuity = 0.25
+
+    start_boundaries = list(scene_cuts)
+    if silences:
+        start_boundaries.extend(silence_end for _, silence_end in silences)
+    start_boundary = (
+        _boundary_proximity(extended_start, start_boundaries, window=1.75)
+        if start_boundaries
+        else 0.5
+    )
+
+    return max(
+        0.0,
+        min(
+            1.0,
+            0.25 * lead_activity
+            + 0.25 * active_audio
+            + 0.20 * ramp_score
+            + 0.20 * continuity
+            + 0.10 * start_boundary,
+        ),
+    )
+
+
+def _duration_allowed_for_approximate(
+    duration: int,
+    target_duration: Optional[int],
+    max_duration_seconds: int,
+) -> bool:
+    target = int(target_duration or 30)
+    tolerance = _approx_tolerance(target)
+    low = max(SHORT_MIN_DURATION_SECONDS, target - tolerance)
+    high = min(max_duration_seconds, target + tolerance)
+    return low <= duration <= high
 
 
 def _duration_candidates(
