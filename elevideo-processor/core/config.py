@@ -102,11 +102,16 @@ CONVERSION_MODE: dict = {
     "mode": "smart_crop",
     "modes": {
         "full": {
-            "description":      "Mantiene todo el contenido con letterbox",
-            "width":            1080,
-            "height":           1920,
-            "blur_background":  False,
-            "background_color": "black",
+            "description":           "Mantiene todo el contenido con composición vertical",
+            "width":                 1080,
+            "height":                1920,
+            "blur_background":       False,
+            "background_color":      "black",
+            "background_zoom":       1.05,
+            "background_brightness": -0.08,
+            "background_saturation": 0.85,
+            # None activa un sigma adaptativo según la resolución de salida.
+            "background_blur_sigma": None,
         },
         "smart_crop": {
             "description": "Recorte inteligente siguiendo rostros",
