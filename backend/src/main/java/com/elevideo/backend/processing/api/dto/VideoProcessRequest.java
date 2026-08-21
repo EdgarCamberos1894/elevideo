@@ -4,6 +4,7 @@ import com.elevideo.backend.processing.internal.model.BackgroundMode;
 import com.elevideo.backend.processing.internal.model.Platform;
 import com.elevideo.backend.processing.internal.model.ProcessingMode;
 import com.elevideo.backend.processing.internal.model.Quality;
+import com.elevideo.backend.processing.internal.model.ShortAutoDurationMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 
@@ -24,6 +25,8 @@ public record VideoProcessRequest(
         BackgroundMode backgroundMode,
 
         ShortManualOptions shortOptions,
+
+        ShortAutoDurationMode shortAutoDurationMode,
 
         @Min(5) @Max(60)
         Integer shortAutoDuration,
