@@ -1,6 +1,5 @@
 import logging
 import os
-import subprocess
 import time
 from pathlib import Path
 from typing import Tuple
@@ -500,83 +499,52 @@ def _process_smart_crop(
 
 
 def _process_full(input_path: str, config, encoder: str) -> Tuple[str, dict]:
-    from processing.ffmpeg_ultra import crop_video_ultra
+    """Fallback de Smart Crop usando el mismo compositor Full que los modos explícitos."""
+    from processing.full_frame_renderer import process_full_frame
 
-    cap = cv2.VideoCapture(input_path)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    cap.release()
-
-    output_w = config.CROP_SETTINGS["width"]
-    output_h = config.CROP_SETTINGS["height"]
-
-    if (
-        width == output_w
-        and height == output_h
-        and not config.ENCODING_SETTINGS.get("apply_unsharp", False)
-    ):
-        return input_path, _base_metrics(reason="already_exact")
-
-    original_mode = config.CONVERSION_MODE.get("mode")
-    config.CONVERSION_MODE["mode"] = "full"
-    try:
-        output = _output_path(input_path, "full")
-        encoding_started = time.time()
-        ok = crop_video_ultra(input_path, output, [], config, encoder=encoder)
-        encoding_time = time.time() - encoding_started
-        if not ok:
-            raise RuntimeError("Error en el encoding del video en modo full")
-        return output, {
-            **_base_metrics(reason="full_mode"),
-            "mode": "full",
-            "encoding_time": encoding_time,
-        }
-    finally:
-        config.CONVERSION_MODE["mode"] = original_mode
+    return process_full_frame(
+        input_path=input_path,
+        config=config,
+        encoder=encoder,
+    )
 
 
 def _rescale_vertical(input_path: str, config, encoder: str) -> Tuple[str, dict]:
+    """Normaliza un video ya vertical usando el mismo encoder/perfil del pipeline principal."""
+    from processing.ffmpeg_ultra import _encode
+
     output_w = config.CROP_SETTINGS["width"]
     output_h = config.CROP_SETTINGS["height"]
-    preset = config.ENCODING_SETTINGS["quality_preset"]
-    s = config.ENCODING_SETTINGS["presets"][preset]
 
     filters = [
-        f"scale={output_w}:{output_h}:force_original_aspect_ratio=decrease",
+        f"scale={output_w}:{output_h}:force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "setsar=1",
         f"pad={output_w}:{output_h}:(ow-iw)/2:(oh-ih)/2:color=black",
+        "setsar=1",
     ]
     if config.ENCODING_SETTINGS.get("apply_unsharp", False):
-        filters.append(f"unsharp={config.ENCODING_SETTINGS['unsharp_params']}")
+        filters.insert(2, f"unsharp={config.ENCODING_SETTINGS['unsharp_params']}")
 
     output = _output_path(input_path, "rescaled")
-    cmd = [
-        "ffmpeg", "-y", "-i", input_path,
-        "-vf", ",".join(filters),
-        "-c:v", encoder,
-        "-preset", s["preset"],
-        "-crf", str(s["crf"]),
-    ]
-
-    if encoder == "libx264":
-        cmd.extend(["-profile:v", s.get("profile", "high")])
-
-    cmd.extend([
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        output,
-    ])
-
     encoding_started = time.time()
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        logger.error("Re-scale falló | stderr=%s", (e.stderr or "")[-500:])
+    ok = _encode(
+        input_path,
+        output,
+        ",".join(filters),
+        config,
+        encoder,
+    )
+    encoding_time = time.time() - encoding_started
+
+    if not ok:
         raise RuntimeError("Error al re-escalar el video")
 
-    encoding_time = time.time() - encoding_started
-    logger.info("Video re-escalado | output=%s | encoding=%.2fs", output, encoding_time)
+    logger.info(
+        "Video vertical normalizado | output=%s | encoding=%.2fs | encoder=%s",
+        output,
+        encoding_time,
+        encoder,
+    )
     return output, {
         **_base_metrics(reason="vertical_rescale"),
         "mode": "vertical_rescale",
