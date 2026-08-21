@@ -41,12 +41,20 @@ def _process_full(input_path, output_path, config, mode_config, encoder) -> bool
     w, h = mode_config["width"], mode_config["height"]
 
     if mode_config.get("blur_background", False):
+        if config.ENCODING_SETTINGS.get("apply_unsharp", False):
+            composite_tail = (
+                f"[blurred][scaled]overlay=(W-w)/2:(H-h)/2[composite];"
+                f"[composite]unsharp={config.ENCODING_SETTINGS['unsharp_params']}[vout]"
+            )
+        else:
+            composite_tail = "[blurred][scaled]overlay=(W-w)/2:(H-h)/2[vout]"
+
         vf = (
             f"[0:v]split=2[bg][fg];"
             f"[bg]scale={w}:{h}:force_original_aspect_ratio=increase,"
             f"crop={w}:{h},gblur=sigma=20[blurred];"
             f"[fg]scale={w}:{h}:force_original_aspect_ratio=decrease[scaled];"
-            f"[blurred][scaled]overlay=(W-w)/2:(H-h)/2[vout]"
+            f"{composite_tail}"
         )
         logger.info("Usando fondo difuminado")
         return _encode(
@@ -188,6 +196,7 @@ def _process_hybrid_smart_crop(
     positions = sorted(positions, key=lambda position: position[0])
     viewports = sorted(viewports, key=lambda viewport: viewport[0])
     max_keyframes = int(config.KEYFRAME_SETTINGS.get("max_keyframes", 80))
+    viewport_keyframes = min(max_keyframes, 36)
 
     center_positions = [
         (timestamp, x + crop_w / 2.0, critical)
@@ -201,7 +210,7 @@ def _process_hybrid_smart_crop(
     viewport_expr = _build_lerp(
         viewports,
         False,
-        max_keyframes=max_keyframes,
+        max_keyframes=viewport_keyframes,
     )
 
     safe_viewport = f"min({float(source_w):.3f},max({float(crop_w):.3f},{viewport_expr}))"
@@ -209,18 +218,11 @@ def _process_hybrid_smart_crop(
         f"max(0,min({float(source_w):.3f}-({safe_viewport}),"
         f"({center_expr})-({safe_viewport})/2))"
     )
-    scale_w = (
-        f"trunc(iw*{float(output_w):.3f}/({safe_viewport})/2)*2"
-    )
-    scale_h = (
-        f"trunc(ih*{float(output_w):.3f}/({safe_viewport})/2)*2"
-    )
-    overlay_x = (
-        f"-({left_expr})*{float(output_w):.3f}/({safe_viewport})"
-    )
+    scale_w = f"trunc(iw*{float(output_w):.3f}/({safe_viewport})/2)*2"
+    scale_h = f"trunc(ih*{float(output_w):.3f}/({safe_viewport})/2)*2"
+    overlay_x = f"-({left_expr})*{float(output_w):.3f}/({safe_viewport})"
 
-    unsharp = config.ENCODING_SETTINGS.get("apply_unsharp", False)
-    if unsharp:
+    if config.ENCODING_SETTINGS.get("apply_unsharp", False):
         foreground_tail = (
             f"[fgscaled]unsharp={config.ENCODING_SETTINGS['unsharp_params']}[fg];"
         )
@@ -261,8 +263,7 @@ def _prepare_hybrid_viewports(profile, positions, crop_w: int):
     max_required_ratio = max(raw)
     stats["max_required_width"] = max_required_ratio * crop_w
 
-    # Un sujeto que cabe con holgura no entra al nuevo pipeline. Esto mantiene
-    # exactamente el Smart Crop existente para los videos que ya funcionan bien.
+    # Si el sujeto cabe, el video sigue exactamente por el pipeline Smart Crop existente.
     if max_required_ratio <= 1.04:
         return [], stats
 
