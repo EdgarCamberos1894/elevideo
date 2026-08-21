@@ -78,6 +78,15 @@ def _process_with_progress_context(
     tracker,
 ):
     with bind_progress_tracker(tracker):
+        if config.CONVERSION_MODE["mode"] == "full":
+            from processing.full_frame_renderer import process_full_frame
+
+            return process_full_frame(
+                input_path=input_path,
+                config=config,
+                encoder=encoder,
+            )
+
         return process_video_enhanced(
             input_path,
             config,
