@@ -27,25 +27,25 @@
   }
 
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 98%;
+    --background: 252 32% 7%;
+    --foreground: 245 30% 97%;
+    --card: 250 28% 10%;
+    --card-foreground: 245 30% 97%;
+    --popover: 250 28% 10%;
+    --popover-foreground: 245 30% 97%;
     --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 222 47% 12%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 222 47% 12%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 250 91% 65%;
+    --primary-foreground: 252 32% 9%;
+    --secondary: 249 23% 15%;
+    --secondary-foreground: 245 30% 97%;
+    --muted: 249 23% 15%;
+    --muted-foreground: 246 15% 70%;
+    --accent: 264 88% 67%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 222 47% 15%;
-    --input: 222 47% 15%;
-    --ring: 250 91% 65%;
+    --border: 249 22% 21%;
+    --input: 249 22% 21%;
+    --ring: 264 88% 67%;
   }
 }
 
@@ -103,7 +103,7 @@ input:-webkit-autofill:active {
 .dark input:-webkit-autofill:hover,
 .dark input:-webkit-autofill:focus,
 .dark input:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 1000px rgb(15 23 42) inset !important;
+  -webkit-box-shadow: 0 0 0 1000px rgb(27 21 45) inset !important;
 }
 
 /* Dashboard background */
@@ -218,47 +218,47 @@ input:-webkit-autofill:active {
  * Tailwind utility classes without changing the global theme tokens.
  */
 .dark .dashboard-bg {
-  background-color: rgb(7 12 24);
+  background-color: rgb(14 10 27);
   background-image:
-    radial-gradient(at 92% 2%, rgb(79 70 229 / 0.16) 0, transparent 34%),
-    radial-gradient(at 8% 92%, rgb(37 99 235 / 0.1) 0, transparent 36%),
-    linear-gradient(180deg, rgb(7 12 24) 0%, rgb(5 10 20) 100%);
+    radial-gradient(at 92% 2%, rgb(147 51 234 / 0.2) 0, transparent 35%),
+    radial-gradient(at 8% 92%, rgb(79 70 229 / 0.12) 0, transparent 38%),
+    linear-gradient(180deg, rgb(18 12 34) 0%, rgb(10 8 21) 100%);
 }
 
 .dark [data-testid="dashboard-metrics"] > div {
-  border-color: rgb(71 85 105 / 0.78);
-  background: linear-gradient(145deg, rgb(30 41 59 / 0.9), rgb(15 23 42 / 0.96));
-  box-shadow: 0 18px 42px -30px rgb(0 0 0 / 0.95);
+  border-color: rgb(102 78 135 / 0.72);
+  background: linear-gradient(145deg, rgb(39 29 61 / 0.94), rgb(24 18 42 / 0.98));
+  box-shadow: 0 18px 42px -30px rgb(88 28 135 / 0.72);
 }
 
 .dark [data-testid="dashboard-page"] section:has(#projects-library-title) {
-  border-color: rgb(71 85 105 / 0.82);
-  background: linear-gradient(145deg, rgb(15 23 42 / 0.98), rgb(13 20 38 / 0.98));
+  border-color: rgb(102 78 135 / 0.76);
+  background: linear-gradient(145deg, rgb(28 20 47 / 0.99), rgb(20 15 36 / 0.99));
   box-shadow:
     0 30px 74px -44px rgb(0 0 0 / 0.98),
-    0 16px 40px -28px rgb(79 70 229 / 0.34),
+    0 16px 40px -28px rgb(126 34 206 / 0.42),
     inset 0 1px 0 rgb(255 255 255 / 0.035);
 }
 
 .dark [data-testid="projects-library-header"] {
-  border-color: rgb(71 85 105 / 0.68);
+  border-color: rgb(102 78 135 / 0.64);
   background:
-    radial-gradient(circle at 100% 0%, rgb(99 102 241 / 0.09), transparent 34%),
-    rgb(15 23 42 / 0.78);
+    radial-gradient(circle at 100% 0%, rgb(168 85 247 / 0.12), transparent 35%),
+    rgb(29 22 48 / 0.84);
 }
 
 .dark [data-testid="projects-count"] {
-  border-color: rgb(100 116 139 / 0.65);
-  background: rgb(30 41 59 / 0.96);
-  color: rgb(226 232 240);
+  border-color: rgb(126 101 158 / 0.68);
+  background: rgb(43 32 66 / 0.96);
+  color: rgb(237 233 254);
   box-shadow: 0 8px 20px -16px rgb(0 0 0 / 0.9);
 }
 
 .dark [data-testid="projects-library-filters"] input,
 .dark [data-testid="projects-library-filters"] [role="combobox"] {
-  border-color: rgb(100 116 139 / 0.9);
-  background: rgb(30 41 59 / 0.94);
-  color: rgb(241 245 249);
+  border-color: rgb(126 101 158 / 0.86);
+  background: rgb(39 30 60 / 0.96);
+  color: rgb(245 243 255);
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.035),
     0 7px 18px -14px rgb(0 0 0 / 0.95);
@@ -266,32 +266,32 @@ input:-webkit-autofill:active {
 
 .dark [data-testid="projects-library-filters"] input:hover,
 .dark [data-testid="projects-library-filters"] [role="combobox"]:hover {
-  border-color: rgb(129 140 248 / 0.72);
+  border-color: rgb(192 132 252 / 0.76);
 }
 
 .dark [data-testid="projects-library-content"] {
   background:
-    radial-gradient(circle at 50% 0%, rgb(99 102 241 / 0.055), transparent 30%),
-    rgb(3 8 19 / 0.88);
+    radial-gradient(circle at 50% 0%, rgb(168 85 247 / 0.08), transparent 32%),
+    rgb(12 9 24 / 0.9);
 }
 
 .dark [data-testid="projects-library-content"] > .grid > div {
-  border-color: rgb(71 85 105 / 0.9);
-  background: linear-gradient(145deg, rgb(30 41 59 / 0.98), rgb(15 23 42 / 0.98));
+  border-color: rgb(102 78 135 / 0.82);
+  background: linear-gradient(145deg, rgb(38 29 59 / 0.98), rgb(24 18 42 / 0.98));
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.025),
     0 18px 40px -30px rgb(0 0 0 / 0.98);
 }
 
 .dark [data-testid="projects-library-content"] > .grid > div:hover {
-  border-color: rgb(129 140 248 / 0.65);
+  border-color: rgb(192 132 252 / 0.68);
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.04),
-    0 22px 48px -30px rgb(79 70 229 / 0.48);
+    0 22px 48px -30px rgb(126 34 206 / 0.56);
 }
 
 .dark [data-testid="dashboard-page"] section:has(#projects-library-title) nav {
-  border-color: rgb(71 85 105 / 0.62);
+  border-color: rgb(102 78 135 / 0.6);
 }
 
 html {

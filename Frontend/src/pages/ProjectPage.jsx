@@ -235,9 +235,9 @@ export function ProjectPage() {
 
   return (
     <Layout>
-      <div className="space-y-8" data-testid="project-page">
+      <div className="space-y-6 sm:space-y-7" data-testid="project-page">
         {/* Header */}
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <Link
             to="/dashboard"
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
@@ -245,13 +245,13 @@ export function ProjectPage() {
             <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
             Volver a proyectos
           </Link>
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
             <div className="space-y-1">
               {projectLoading ? (
                 <Skeleton className="h-10 w-64" />
               ) : (
                 <>
-                  <h1 className="font-outfit text-4xl font-bold tracking-tight">
+                  <h1 className="font-outfit text-3xl font-bold tracking-tight sm:text-4xl">
                     {project?.name}
                   </h1>
                   {project?.description && (
@@ -440,9 +440,12 @@ export function ProjectPage() {
             </Card>
           </div>
         ) : (
-          <div className={videos.length === 1
-            ? 'grid max-w-2xl grid-cols-1 gap-6'
-            : 'grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3'}>
+          <div
+            className={videos.length === 1
+              ? 'grid max-w-lg grid-cols-1 gap-5'
+              : 'grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 sm:gap-6'}
+            data-testid="uploaded-videos-grid"
+          >
             {videos.map((video) => {
               const status = statusConfig[video.status] || statusConfig.UPLOADED;
 
@@ -534,7 +537,7 @@ export function ProjectPage() {
                   </div>
 
                   {/* Content */}
-                  <CardHeader className="space-y-3">
+                  <CardHeader className="space-y-2 p-4 sm:p-5">
                     <CardTitle className="font-outfit text-base line-clamp-1 group-hover:text-purple-500 transition-colors">
                       <Link to={`/projects/${projectId}/videos/${video.id}`}>
                         {video.title}
