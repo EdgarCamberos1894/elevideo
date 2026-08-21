@@ -245,14 +245,24 @@ def _process_smart_crop(
                             source_crop_w,
                             emergency=emergency,
                         )
+                        safety_override = (
+                            protected_x < safe_min_x or protected_x > safe_max_x
+                        )
+                        if safety_override:
+                            protected_x = float(np.clip(
+                                protected_x,
+                                safe_min_x,
+                                safe_max_x,
+                            ))
+
                         # Solo una violación real de la zona segura necesita
                         # sobrevivir obligatoriamente a la reducción de keyframes.
-                        critical = bool(emergency)
+                        critical = bool(emergency or safety_override)
                         positions.append((ts, protected_x, critical))
 
                         if comfort_corrected:
                             comfort_zone_corrections += 1
-                        if emergency:
+                        if emergency or safety_override:
                             safe_zone_corrections += 1
                             emergency_reframes += 1
                         pressure_event = corrected or is_predicted or pressure >= 0.35
@@ -859,12 +869,15 @@ def _protect_multipass_positions(positions, framing_windows, crop_w: int):
             crop_w,
             emergency=emergency,
         )
-        critical = bool(emergency)
+        safety_override = protected < safe_min_x or protected > safe_max_x
+        if safety_override:
+            protected = float(np.clip(protected, safe_min_x, safe_max_x))
+        critical = bool(emergency or safety_override)
         protected_positions.append((timestamp, protected, critical))
 
         if comfort_corrected:
             comfort_corrections += 1
-        if emergency:
+        if emergency or safety_override:
             safe_corrections += 1
             emergencies += 1
         max_pressure = max(max_pressure, pressure)
