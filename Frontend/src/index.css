@@ -225,15 +225,10 @@ input:-webkit-autofill:active {
     linear-gradient(180deg, rgb(7 12 24) 0%, rgb(5 10 20) 100%);
 }
 
-.dark [data-testid="dashboard-page"] > details,
-.dark [data-testid="dashboard-page"] > details + div {
+.dark [data-testid="dashboard-metrics"] > div {
   border-color: rgb(71 85 105 / 0.78);
   background: linear-gradient(145deg, rgb(30 41 59 / 0.9), rgb(15 23 42 / 0.96));
   box-shadow: 0 18px 42px -30px rgb(0 0 0 / 0.95);
-}
-
-.dark [data-testid="dashboard-page"] > details > div {
-  border-color: rgb(71 85 105 / 0.55);
 }
 
 .dark [data-testid="dashboard-page"] section:has(#projects-library-title) {
@@ -252,7 +247,7 @@ input:-webkit-autofill:active {
     rgb(15 23 42 / 0.78);
 }
 
-.dark [data-testid="projects-library-header"] > div:first-child > span {
+.dark [data-testid="projects-count"] {
   border-color: rgb(100 116 139 / 0.65);
   background: rgb(30 41 59 / 0.96);
   color: rgb(226 232 240);

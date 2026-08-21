@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -26,7 +26,6 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -54,13 +53,17 @@ const SORT_OPTIONS = [
   { value: 'name:DESC', label: 'Nombre Z–A' },
 ];
 
-function DashboardMetric({ value, label, accent = false }) {
+function DashboardMetric({ value, label, detail, icon: Icon, iconClass, iconSurface }) {
   return (
-    <div className="min-w-0 px-3 py-2.5 sm:px-5 sm:py-3">
-      <p className={`font-outfit text-lg font-semibold leading-none sm:text-xl ${accent ? 'text-indigo-500' : 'text-foreground'}`}>
+    <div className="min-h-[116px] min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.55)] sm:min-h-[132px] sm:p-4 dark:border-slate-800 dark:bg-card/70">
+      <div className={`flex h-8 w-8 items-center justify-center rounded-lg sm:h-9 sm:w-9 ${iconSurface}`}>
+        <Icon className={`h-4 w-4 sm:h-[18px] sm:w-[18px] ${iconClass}`} aria-hidden="true" />
+      </div>
+      <p className="mt-3 font-outfit text-2xl font-semibold leading-none text-slate-950 sm:text-3xl dark:text-foreground">
         {value}
       </p>
-      <p className="mt-1.5 truncate text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1.5 truncate text-xs font-medium text-slate-700 sm:text-sm dark:text-slate-200">{label}</p>
+      <p className="mt-1 hidden truncate text-xs text-slate-500 sm:block dark:text-slate-400">{detail}</p>
     </div>
   );
 }
@@ -154,6 +157,12 @@ export function DashboardPage() {
     },
   });
 
+  const openCreateDialog = () => {
+    setProjectName('');
+    setProjectDescription('');
+    setIsCreateOpen(true);
+  };
+
   const handleCreate = (event) => {
     event.preventDefault();
     createMutation.mutate({ name: projectName, description: projectDescription });
@@ -193,9 +202,30 @@ export function DashboardPage() {
   const videoCount = Number.isFinite(parsedVideoCount) ? parsedVideoCount : null;
   const conversionCount = Number.isFinite(parsedConversionCount) ? parsedConversionCount : null;
   const metrics = [
-    { value: projectCount, label: 'Proyectos' },
-    ...(videoCount !== null ? [{ value: videoCount, label: 'Videos' }] : []),
-    ...(conversionCount !== null ? [{ value: conversionCount, label: 'Resultados', accent: true }] : []),
+    {
+      value: projectCount,
+      label: 'Proyectos',
+      detail: 'Colecciones creadas',
+      icon: Folder,
+      iconClass: 'text-blue-600 dark:text-blue-300',
+      iconSurface: 'bg-blue-50 dark:bg-blue-500/15',
+    },
+    ...(videoCount !== null ? [{
+      value: videoCount,
+      label: 'Videos',
+      detail: 'Archivos cargados',
+      icon: Film,
+      iconClass: 'text-violet-600 dark:text-violet-300',
+      iconSurface: 'bg-violet-50 dark:bg-violet-500/15',
+    }] : []),
+    ...(conversionCount !== null ? [{
+      value: conversionCount,
+      label: 'Resultados',
+      detail: 'Conversiones listas',
+      icon: Sparkles,
+      iconClass: 'text-emerald-600 dark:text-emerald-300',
+      iconSurface: 'bg-emerald-50 dark:bg-emerald-500/15',
+    }] : []),
   ];
   const hasAnyProjects = projectCount > 0 || totalElements > 0;
   const isSearchEmpty = projects.length === 0 && Boolean(search);
@@ -340,106 +370,73 @@ export function DashboardPage() {
   return (
     <Layout>
       <div className="space-y-6 sm:space-y-8" data-testid="dashboard-page">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
-          <div className="space-y-1">
-            <h1 className="font-outfit text-3xl font-bold tracking-tight sm:text-4xl">
-              Mis <span className="gradient-text">Proyectos</span>
-            </h1>
-            <p className="text-base text-muted-foreground sm:text-lg">
-              Organiza y convierte tus videos a formato vertical
-            </p>
-          </div>
-
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button
-                size="lg"
-                variant="gradient"
-                className="w-full sm:w-auto"
-                data-testid="create-project-button"
-              >
-                <Plus className="mr-2 h-5 w-5" />
-                Nuevo proyecto
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <form onSubmit={handleCreate}>
-                <DialogHeader>
-                  <DialogTitle className="font-outfit text-xl">Crear proyecto</DialogTitle>
-                  <DialogDescription>Los proyectos te ayudan a organizar tus videos</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nombre del proyecto</Label>
-                    <Input
-                      id="name"
-                      value={projectName}
-                      onChange={(event) => setProjectName(event.target.value)}
-                      placeholder="Ej: Videos de TikTok"
-                      className="h-11"
-                      data-testid="project-name-input"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Descripción (opcional)</Label>
-                    <Textarea
-                      id="description"
-                      value={projectDescription}
-                      onChange={(event) => setProjectDescription(event.target.value)}
-                      placeholder="Describe tu proyecto..."
-                      className="resize-none"
-                      rows={3}
-                      data-testid="project-description-input"
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    type="submit"
-                    variant="brand"
-                    className="w-full"
-                    disabled={createMutation.isPending}
-                    data-testid="create-project-submit"
-                  >
-                    {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Crear proyecto
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+        <div className="max-w-2xl space-y-1">
+          <h1 className="font-outfit text-3xl font-bold tracking-tight sm:text-4xl">
+            Panel de <span className="gradient-text">contenido</span>
+          </h1>
+          <p className="text-base text-muted-foreground sm:text-lg">
+            Consulta el avance de tus proyectos y conversiones.
+          </p>
         </div>
 
-        {hasAnyProjects && (
-          <>
-            <details className="group rounded-xl border border-border/50 bg-card/45 shadow-sm md:hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 [&::-webkit-details-marker]:hidden">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-foreground">Resumen</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {metrics.map((metric) => `${metric.value} ${metric.label.toLowerCase()}`).join(' · ')}
-                  </p>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogContent className="sm:max-w-md">
+            <form onSubmit={handleCreate}>
+              <DialogHeader>
+                <DialogTitle className="font-outfit text-xl">Crear proyecto</DialogTitle>
+                <DialogDescription>Los proyectos te ayudan a organizar tus videos</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-6">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nombre del proyecto</Label>
+                  <Input
+                    id="name"
+                    value={projectName}
+                    onChange={(event) => setProjectName(event.target.value)}
+                    placeholder="Ej: Videos de TikTok"
+                    className="h-11"
+                    data-testid="project-name-input"
+                    required
+                  />
                 </div>
-                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-              </summary>
-              <div
-                className="grid divide-x divide-border/50 border-t border-border/50"
-                style={{ gridTemplateColumns: `repeat(${Math.max(1, metrics.length)}, minmax(0, 1fr))` }}
-              >
-                {metrics.map((metric) => <DashboardMetric key={metric.label} {...metric} />)}
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descripción (opcional)</Label>
+                  <Textarea
+                    id="description"
+                    value={projectDescription}
+                    onChange={(event) => setProjectDescription(event.target.value)}
+                    placeholder="Describe tu proyecto..."
+                    className="resize-none"
+                    rows={3}
+                    data-testid="project-description-input"
+                  />
+                </div>
               </div>
-            </details>
+              <DialogFooter>
+                <Button
+                  type="submit"
+                  variant="brand"
+                  className="w-full"
+                  disabled={createMutation.isPending}
+                  data-testid="create-project-submit"
+                >
+                  {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Crear proyecto
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-            <Card className="hidden overflow-hidden border-border/50 bg-card/45 shadow-sm md:block">
-              <CardContent
-                className="grid divide-x divide-border/50 p-0"
-                style={{ gridTemplateColumns: `repeat(${Math.max(1, metrics.length)}, minmax(0, 1fr))` }}
-              >
-                {metrics.map((metric) => <DashboardMetric key={metric.label} {...metric} />)}
-              </CardContent>
-            </Card>
-          </>
+        {hasAnyProjects && (
+          <section
+            className="grid gap-2.5 sm:gap-4"
+            style={{ gridTemplateColumns: `repeat(${Math.max(1, metrics.length)}, minmax(0, 1fr))` }}
+            aria-label="Resumen del contenido"
+            data-testid="dashboard-metrics"
+          >
+            {metrics.map((metric) => <DashboardMetric key={metric.label} {...metric} />)}
+          </section>
         )}
 
         {isLoading && !hasAnyProjects ? (
@@ -471,7 +468,7 @@ export function DashboardPage() {
                 <Button
                   size="lg"
                   variant="gradient"
-                  onClick={() => setIsCreateOpen(true)}
+                  onClick={openCreateDialog}
                 >
                   <Sparkles className="mr-2 h-5 w-5" />
                   Crear mi primer proyecto
@@ -493,24 +490,34 @@ export function DashboardPage() {
               className="border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900/35 sm:px-6 sm:py-6"
               data-testid="projects-library-header"
             >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                <div>
-                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600 dark:text-indigo-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true" />
-                    Proyectos
-                  </div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                <div className="min-w-0">
                   <h2 id="projects-library-title" className="font-outfit text-xl font-semibold text-slate-950 dark:text-foreground sm:text-2xl">
-                    Biblioteca de proyectos
+                    Mis proyectos
                   </h2>
                   <p className="mt-1.5 hidden max-w-2xl text-sm text-slate-600 dark:text-muted-foreground sm:block">
-                    Busca, ordena y abre tus proyectos desde esta colección.
+                    Busca, ordena y abre tus proyectos desde un solo lugar.
                   </p>
                 </div>
-                <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  {search
-                    ? `${totalElements} resultado${totalElements === 1 ? '' : 's'}`
-                    : `${projectCount} proyecto${projectCount === 1 ? '' : 's'}`}
-                </span>
+                <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
+                  <span
+                    className="w-fit shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                    data-testid="projects-count"
+                  >
+                    {search
+                      ? `${totalElements} resultado${totalElements === 1 ? '' : 's'}`
+                      : `${projectCount} proyecto${projectCount === 1 ? '' : 's'}`}
+                  </span>
+                  <Button
+                    variant="gradient"
+                    className="h-10 min-w-0 flex-1 px-4 sm:flex-none"
+                    onClick={openCreateDialog}
+                    data-testid="create-project-button"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Nuevo proyecto
+                  </Button>
+                </div>
               </div>
 
               <div className="mt-4 sm:mt-5" data-testid="projects-library-filters">
