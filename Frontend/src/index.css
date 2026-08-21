@@ -170,6 +170,8 @@
     min-width: 0;
     white-space: normal;
     justify-content: center;
+    text-align: center;
+    line-height: 1.15;
   }
 
   [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden > .grid > div:last-child > div:last-child > :not(:first-child) {
@@ -189,10 +191,6 @@
   @media (min-width: 1024px) {
     [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid {
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    }
-
-    [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden > .grid > div:last-child > div:last-child > :first-child {
-      white-space: nowrap;
     }
   }
 }
