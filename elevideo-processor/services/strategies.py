@@ -10,6 +10,7 @@ from models.schemas import (
     ProcessingMode,
     get_platform_short_max_duration,
 )
+from utils.processing_progress_context import bind_progress_tracker
 from utils.progress_aware_detector import (
     ProgressAwareDetector,
     expected_selector_samples,
@@ -67,6 +68,26 @@ def _cut_progress(tracker, fraction: float) -> None:
     )
 
 
+def _process_with_progress_context(
+    process_video_enhanced,
+    input_path,
+    config,
+    detector,
+    stabilizer,
+    encoder,
+    tracker,
+):
+    with bind_progress_tracker(tracker):
+        return process_video_enhanced(
+            input_path,
+            config,
+            detector,
+            stabilizer,
+            use_multipass=_use_multipass(config),
+            encoder=encoder,
+        )
+
+
 class VerticalStrategy(ProcessingStrategy):
 
     @property
@@ -90,9 +111,14 @@ class VerticalStrategy(ProcessingStrategy):
             )
             processing_detector = detector
 
-        output_path, metrics = process_video_enhanced(
-            local_input_path, config, processing_detector, stabilizer,
-            use_multipass=_use_multipass(config), encoder=encoder,
+        output_path, metrics = _process_with_progress_context(
+            process_video_enhanced,
+            local_input_path,
+            config,
+            processing_detector,
+            stabilizer,
+            encoder,
+            tracker,
         )
 
         if isinstance(processing_detector, ProgressAwareDetector):
@@ -187,9 +213,14 @@ class ShortAutoStrategy(ProcessingStrategy):
             )
             processing_detector = detector
 
-        output_path, metrics = process_video_enhanced(
-            intermediate_path, config, processing_detector, stabilizer,
-            use_multipass=_use_multipass(config), encoder=encoder,
+        output_path, metrics = _process_with_progress_context(
+            process_video_enhanced,
+            intermediate_path,
+            config,
+            processing_detector,
+            stabilizer,
+            encoder,
+            tracker,
         )
 
         if isinstance(processing_detector, ProgressAwareDetector):
@@ -269,9 +300,14 @@ class ShortManualStrategy(ProcessingStrategy):
             )
             processing_detector = detector
 
-        output_path, metrics = process_video_enhanced(
-            intermediate_path, config, processing_detector, stabilizer,
-            use_multipass=_use_multipass(config), encoder=encoder,
+        output_path, metrics = _process_with_progress_context(
+            process_video_enhanced,
+            intermediate_path,
+            config,
+            processing_detector,
+            stabilizer,
+            encoder,
+            tracker,
         )
 
         if isinstance(processing_detector, ProgressAwareDetector):
