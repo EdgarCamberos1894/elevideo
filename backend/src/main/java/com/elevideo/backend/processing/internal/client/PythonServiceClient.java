@@ -2,14 +2,16 @@ package com.elevideo.backend.processing.internal.client;
 
 import com.elevideo.backend.shared.security.JwtService;
 import com.elevideo.backend.shared.security.TokenPurpose;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
@@ -28,16 +30,18 @@ public class PythonServiceClient {
 
     private final JwtService jwtService;
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
 
-    @Value("${python.service.url}")
+    @org.springframework.beans.factory.annotation.Value("${python.service.url}")
     private String pythonServiceUrl;
 
-    @Value("${python.service.api-key}")
+    @org.springframework.beans.factory.annotation.Value("${python.service.api-key}")
     private String serviceApiKey;
 
-    public PythonServiceClient(JwtService jwtService) {
-        this.jwtService  = jwtService;
-        this.restClient  = RestClient.builder()
+    public PythonServiceClient(JwtService jwtService, ObjectMapper objectMapper) {
+        this.jwtService = jwtService;
+        this.objectMapper = objectMapper;
+        this.restClient = RestClient.builder()
                 .requestFactory(new SimpleClientHttpRequestFactory())
                 .build();
     }
@@ -116,10 +120,6 @@ public class PythonServiceClient {
         catch (ResourceAccessException e)     { throw unavailable(path, e);   }
     }
 
-    // ----------------------------------------------------------------
-    // Helpers
-    // ----------------------------------------------------------------
-
     private String serviceToken(UUID userId) {
         return jwtService.generateServiceToken(userId);
     }
@@ -145,8 +145,12 @@ public class PythonServiceClient {
             throw new PythonServiceException("El recurso solicitado no existe.");
         if (e.getStatusCode() == HttpStatus.UNAUTHORIZED || e.getStatusCode() == HttpStatus.FORBIDDEN)
             throw new PythonServiceException("Error de configuración interna. Contacta al administrador.");
+        if (e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS)
+            throw new ProcessingRateLimitException(
+                    extractDetail(e, "Hay demasiados procesamientos pendientes. Intenta nuevamente más tarde.")
+            );
         if (e.getStatusCode() == HttpStatus.BAD_REQUEST)
-            throw new PythonServiceException("Solicitud inválida: " + e.getResponseBodyAsString());
+            throw new PythonServiceException("Solicitud inválida: " + extractDetail(e, e.getResponseBodyAsString()));
         if (e.getStatusCode() == HttpStatus.CONFLICT)
             throw new PythonServiceException("La solicitud de procesamiento entró en conflicto con un intento previo.");
         throw new PythonServiceException("Error al comunicarse con el servicio de procesamiento.");
@@ -154,7 +158,22 @@ public class PythonServiceClient {
 
     private <T> T handleServer(HttpServerErrorException e, String path) {
         log.error("Error servidor Python | path={} | status={}", path, e.getStatusCode());
+        if (e.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
+            throw new PythonServiceException(
+                    extractDetail(e, "El procesador está ocupado. Intenta nuevamente en un momento.")
+            );
+        }
         throw new PythonServiceException("El servicio de procesamiento falló. Intenta de nuevo.");
+    }
+
+    private String extractDetail(HttpStatusCodeException e, String fallback) {
+        try {
+            JsonNode body = objectMapper.readTree(e.getResponseBodyAsString());
+            String detail = body.path("detail").asText();
+            return detail == null || detail.isBlank() ? fallback : detail;
+        } catch (Exception ignored) {
+            return fallback;
+        }
     }
 
     private PythonServiceException unavailable(String path, ResourceAccessException e) {
