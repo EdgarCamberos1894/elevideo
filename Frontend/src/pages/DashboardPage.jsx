@@ -27,7 +27,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  CheckCircle2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -55,16 +54,13 @@ const SORT_OPTIONS = [
   { value: 'name:DESC', label: 'Nombre Z–A' },
 ];
 
-function DashboardMetric({ value, label, accent = false, status = false }) {
+function DashboardMetric({ value, label, accent = false }) {
   return (
-    <div className="min-w-0 px-4 py-3 sm:px-5">
-      <div className="flex items-center gap-2">
-        {status && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />}
-        <p className={`font-outfit text-xl font-semibold leading-none sm:text-2xl ${accent ? 'text-indigo-500' : status ? 'text-emerald-500' : 'text-foreground'}`}>
-          {value}
-        </p>
-      </div>
-      <p className="mt-1.5 text-xs text-muted-foreground">{label}</p>
+    <div className="min-w-0 px-3 py-2.5 sm:px-5 sm:py-3">
+      <p className={`font-outfit text-lg font-semibold leading-none sm:text-xl ${accent ? 'text-indigo-500' : 'text-foreground'}`}>
+        {value}
+      </p>
+      <p className="mt-1.5 truncate text-[11px] text-muted-foreground sm:text-xs">{label}</p>
     </div>
   );
 }
@@ -192,8 +188,15 @@ export function DashboardPage() {
 
   const summary = summaryData?.data || summaryData || {};
   const projectCount = Number(summary.projectCount ?? totalElements);
-  const videoCount = summary.videoCount ?? '—';
-  const conversionCount = summary.conversionCount ?? '—';
+  const parsedVideoCount = Number(summary.videoCount);
+  const parsedConversionCount = Number(summary.conversionCount);
+  const videoCount = Number.isFinite(parsedVideoCount) ? parsedVideoCount : null;
+  const conversionCount = Number.isFinite(parsedConversionCount) ? parsedConversionCount : null;
+  const metrics = [
+    { value: projectCount, label: 'Proyectos' },
+    ...(videoCount !== null ? [{ value: videoCount, label: 'Videos' }] : []),
+    ...(conversionCount !== null ? [{ value: conversionCount, label: 'Resultados', accent: true }] : []),
+  ];
   const hasAnyProjects = projectCount > 0 || totalElements > 0;
   const isSearchEmpty = projects.length === 0 && Boolean(search);
   const firstVisible = totalElements === 0 ? 0 : page * PROJECTS_PAGE_SIZE + 1;
@@ -273,30 +276,30 @@ export function DashboardPage() {
 
         {hasAnyProjects && (
           <>
-            <details className="group rounded-2xl border border-border/60 bg-card/65 shadow-sm md:hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 [&::-webkit-details-marker]:hidden">
+            <details className="group rounded-xl border border-border/50 bg-card/45 shadow-sm md:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 [&::-webkit-details-marker]:hidden">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-foreground">Resumen de actividad</p>
+                  <p className="text-xs font-medium text-foreground">Resumen</p>
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {projectCount} proyectos · {videoCount} videos · {conversionCount} conversiones
+                    {metrics.map((metric) => `${metric.value} ${metric.label.toLowerCase()}`).join(' · ')}
                   </p>
                 </div>
                 <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
               </summary>
-              <div className="grid grid-cols-2 border-t border-border/60 p-2">
-                <DashboardMetric value={projectCount} label="Proyectos" />
-                <DashboardMetric value={videoCount} label="Videos totales" />
-                <DashboardMetric value={conversionCount} label="Conversiones" accent />
-                <DashboardMetric value="Activo" label="Estado" status />
+              <div
+                className="grid divide-x divide-border/50 border-t border-border/50"
+                style={{ gridTemplateColumns: `repeat(${Math.max(1, metrics.length)}, minmax(0, 1fr))` }}
+              >
+                {metrics.map((metric) => <DashboardMetric key={metric.label} {...metric} />)}
               </div>
             </details>
 
-            <Card className="hidden overflow-hidden border-border/60 bg-card/60 shadow-sm md:block">
-              <CardContent className="grid grid-cols-4 divide-x divide-border/60 p-0">
-                <DashboardMetric value={projectCount} label="Proyectos" />
-                <DashboardMetric value={videoCount} label="Videos totales" />
-                <DashboardMetric value={conversionCount} label="Conversiones" accent />
-                <DashboardMetric value="Activo" label="Estado" status />
+            <Card className="hidden overflow-hidden border-border/50 bg-card/45 shadow-sm md:block">
+              <CardContent
+                className="grid divide-x divide-border/50 p-0"
+                style={{ gridTemplateColumns: `repeat(${Math.max(1, metrics.length)}, minmax(0, 1fr))` }}
+              >
+                {metrics.map((metric) => <DashboardMetric key={metric.label} {...metric} />)}
               </CardContent>
             </Card>
           </>
@@ -351,8 +354,8 @@ export function DashboardPage() {
 
         {isLoading ? (
           <div
-            className="grid justify-start gap-5"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 20rem), 24rem))' }}
+            className="grid gap-5 sm:gap-6"
+            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 20rem), 1fr))' }}
           >
             {[...Array(PROJECTS_PAGE_SIZE)].map((_, index) => (
               <Card key={index} className="h-[250px] w-full overflow-hidden">
@@ -415,8 +418,8 @@ export function DashboardPage() {
         ) : (
           <>
             <div
-              className="grid justify-start gap-5 sm:gap-6"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 20rem), 24rem))' }}
+              className="grid gap-5 sm:gap-6"
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 20rem), 1fr))' }}
             >
               {projects.map((project, index) => {
                 const seed = Number(project.id ?? index);
@@ -424,7 +427,7 @@ export function DashboardPage() {
                   <Link
                     key={project.id}
                     to={`/projects/${project.id}`}
-                    className="group block h-full w-full max-w-[24rem]"
+                    className="group block h-full w-full"
                   >
                     <Card
                       className="card-3d h-full overflow-hidden border-border/50 bg-card hover:border-indigo-500/40 dark:bg-card/80"
