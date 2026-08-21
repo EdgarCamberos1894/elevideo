@@ -177,6 +177,23 @@
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
   }
+
+  /* At the narrow end of the two-column layout, give the primary action its own row. */
+  @media (min-width: 1024px) and (max-width: 1279px) {
+    [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden > .grid > div:last-child > div:last-child {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden > .grid > div:last-child > div:last-child > :first-child {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+
+    [data-testid="video-page"] section:has([data-testid="renditions-tab"][data-state="active"]) [role="tabpanel"][data-state="active"] > .grid > .overflow-hidden > .grid > div:last-child > div:last-child > :not(:first-child) {
+      width: 100%;
+      justify-content: center;
+    }
+  }
 }
 
 html {
