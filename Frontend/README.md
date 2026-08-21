@@ -62,6 +62,10 @@ Frontend/
 └─ package-lock.json       # Control de versiones de dependencias
 ```
 
+## Despliegue
+
+Vercel despliega el frontend integrado desde `refactor-code`. Las ramas de trabajo `feat/*`, `fix/*` y `compare/*` no generan previews automáticos, para evitar builds innecesarios durante la iteración.
+
 ## Licencia
 
 Este proyecto se encuentra bajo la licencia **MIT**.
