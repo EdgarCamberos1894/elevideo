@@ -69,6 +69,25 @@ const backgroundModeOptions = [
   { value: 'black', label: 'Barras negras', desc: 'Fondo negro simple' },
 ];
 
+const smartClipDurationModes = [
+  {
+    value: 'auto',
+    label: 'Automática',
+    desc: 'EleVideo elige el inicio, el cierre y la duración que mejor funcionan.',
+    recommended: true,
+  },
+  {
+    value: 'approximate',
+    label: 'Aproximada',
+    desc: 'Busca cerca de la duración que indiques y puede variar unos segundos para cerrar mejor.',
+  },
+  {
+    value: 'exact',
+    label: 'Exacta',
+    desc: 'Respeta exactamente la duración que indiques.',
+  },
+];
+
 const jobStatusConfig = {
   pending: { label: 'En cola', icon: Clock, className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' },
   processing: { label: 'Procesando', icon: RefreshCw, className: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
@@ -130,6 +149,7 @@ export function VideoPage() {
   const [platform, setPlatform] = useState('tiktok');
   const [quality, setQuality] = useState('normal');
   const [backgroundMode, setBackgroundMode] = useState('smart_crop');
+  const [shortAutoDurationMode, setShortAutoDurationMode] = useState('auto');
   const [shortAutoDuration, setShortAutoDuration] = useState(30);
   const [shortStartTime, setShortStartTime] = useState(0);
   const [shortDuration, setShortDuration] = useState(30);
@@ -283,8 +303,13 @@ export function VideoPage() {
       toast.error(`El video debe durar al menos ${SHORT_MIN_DURATION_SECONDS} segundos para crear un short.`);
       return;
     }
-    if (hasVideoDuration && processingMode === 'short_auto' && shortAutoDuration > videoDurationSeconds) {
-      toast.error('La duración del short no puede superar la duración del video.');
+    if (
+      hasVideoDuration
+      && processingMode === 'short_auto'
+      && shortAutoDurationMode !== 'auto'
+      && shortAutoDuration > videoDurationSeconds
+    ) {
+      toast.error('La duración objetivo no puede superar la duración del video.');
       return;
     }
     if (hasVideoDuration && processingMode === 'short_manual' && shortStartTime + shortDuration > videoDurationSeconds) {
@@ -294,7 +319,10 @@ export function VideoPage() {
 
     const data = { processingMode, platform, quality, backgroundMode };
     if (processingMode === 'short_auto') {
-      data.shortAutoDuration = shortAutoDuration;
+      data.shortAutoDurationMode = shortAutoDurationMode;
+      if (shortAutoDurationMode !== 'auto') {
+        data.shortAutoDuration = shortAutoDuration;
+      }
     } else if (processingMode === 'short_manual') {
       data.shortOptions = { startTime: shortStartTime, duration: shortDuration };
     }
@@ -542,10 +570,55 @@ export function VideoPage() {
 
                 {processingMode === 'short_auto' && (
                   <div className="space-y-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                    <div className="flex justify-between items-center"><Label className="text-sm">Duración del short</Label><span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-bold">{shortAutoDuration}s</span></div>
-                    <Slider value={[shortAutoDuration]} onValueChange={([v]) => setShortAutoDuration(v)} min={SHORT_MIN_DURATION_SECONDS} max={shortAutoMaxDuration} step={1} className="py-1" data-testid="short-duration-slider" />
-                    <div className="flex justify-between text-[10px] text-muted-foreground"><span>{SHORT_MIN_DURATION_SECONDS}s</span><span>{shortAutoMaxDuration}s</span></div>
-                    {hasVideoDuration && videoDurationSeconds < SHORT_MAX_DURATION_SECONDS && <p className="text-[10px] text-center text-muted-foreground">Máximo ajustado a la duración del video: {formatDuration(videoDurationSeconds)}</p>}
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <Label className="text-sm font-medium">Duración del clip</Label>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">También influye en cómo EleVideo decide el cierre.</p>
+                      </div>
+                      {shortAutoDurationMode === 'auto' && (
+                        <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 dark:text-amber-300">Recomendado</Badge>
+                      )}
+                    </div>
+
+                    <div className="grid gap-2">
+                      {smartClipDurationModes.map((mode) => {
+                        const active = shortAutoDurationMode === mode.value;
+                        return (
+                          <button
+                            key={mode.value}
+                            type="button"
+                            onClick={() => setShortAutoDurationMode(mode.value)}
+                            data-testid={`short-duration-mode-${mode.value}`}
+                            className={`w-full rounded-lg border p-3 text-left transition-all ${active ? 'border-amber-500/60 bg-amber-500/10 shadow-sm' : 'border-border/70 bg-background/50 hover:border-amber-500/30 hover:bg-amber-500/5'}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-sm font-medium ${active ? 'text-amber-700 dark:text-amber-300' : ''}`}>{mode.label}</span>
+                              {mode.recommended && <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">Recomendado</span>}
+                            </div>
+                            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{mode.desc}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {shortAutoDurationMode === 'auto' ? (
+                      <div className="rounded-lg border border-amber-500/20 bg-background/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                        Prioriza clips de <span className="font-medium text-foreground">30–50 s</span>, pero puede elegir entre <span className="font-medium text-foreground">20–60 s</span> si encuentra un inicio y un cierre más naturales.
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 pt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">{shortAutoDurationMode === 'approximate' ? 'Duración objetivo' : 'Duración exacta'}</span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-bold">{shortAutoDuration}s</span>
+                        </div>
+                        <Slider value={[shortAutoDuration]} onValueChange={([v]) => setShortAutoDuration(v)} min={SHORT_MIN_DURATION_SECONDS} max={shortAutoMaxDuration} step={1} className="py-1" data-testid="short-duration-slider" />
+                        <div className="flex justify-between text-[10px] text-muted-foreground"><span>{SHORT_MIN_DURATION_SECONDS}s</span><span>{shortAutoMaxDuration}s</span></div>
+                        {shortAutoDurationMode === 'approximate' && (
+                          <p className="text-[11px] leading-relaxed text-muted-foreground">EleVideo puede mover el final unos segundos antes o después para favorecer silencios, cambios de escena o una caída natural de actividad.</p>
+                        )}
+                        {hasVideoDuration && videoDurationSeconds < SHORT_MAX_DURATION_SECONDS && <p className="text-[10px] text-center text-muted-foreground">Máximo ajustado a la duración del video: {formatDuration(videoDurationSeconds)}</p>}
+                      </div>
+                    )}
                   </div>
                 )}
 
