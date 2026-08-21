@@ -11,6 +11,7 @@ import com.elevideo.backend.processing.internal.model.JobLifecycleGroup;
 import com.elevideo.backend.processing.internal.model.JobStatus;
 import com.elevideo.backend.processing.internal.model.ProcessingJob;
 import com.elevideo.backend.processing.internal.model.ProcessingMode;
+import com.elevideo.backend.processing.internal.model.ShortAutoDurationMode;
 import com.elevideo.backend.processing.internal.model.VideoRendition;
 import com.elevideo.backend.processing.internal.repository.ProcessingJobRepository;
 import com.elevideo.backend.processing.internal.repository.VideoRenditionRepository;
@@ -231,13 +232,19 @@ class ProcessingServiceImpl implements ProcessingService {
         double videoDuration = durationInSeconds.doubleValue();
 
         if (request.processingMode() == ProcessingMode.SHORT_AUTO) {
+            ShortAutoDurationMode durationMode = request.shortAutoDurationMode() == null
+                    ? ShortAutoDurationMode.EXACT
+                    : request.shortAutoDurationMode();
             Integer requestedDuration = request.shortAutoDuration();
-            if (requestedDuration == null) {
-                throw new InvalidClipRangeException("Debes indicar la duración del short automático.");
-            }
-            if (requestedDuration > videoDuration) {
+
+            if (durationMode != ShortAutoDurationMode.AUTO && requestedDuration == null) {
                 throw new InvalidClipRangeException(
-                        "La duración del short no puede superar los " + durationInSeconds + " segundos del video."
+                        "Debes indicar la duración objetivo cuando el modo es aproximado o exacto."
+                );
+            }
+            if (requestedDuration != null && requestedDuration > videoDuration) {
+                throw new InvalidClipRangeException(
+                        "La duración objetivo no puede superar los " + durationInSeconds + " segundos del video."
                 );
             }
             return;
