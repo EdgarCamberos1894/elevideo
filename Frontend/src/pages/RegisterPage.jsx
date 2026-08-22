@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { EleVideoLogo } from '@/components/EleVideoLogo';
 import { toast } from 'sonner';
-import { Film, Loader2, Eye, EyeOff, Moon, Sun, Sparkles, CheckCircle } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Moon, Sun, Sparkles, CheckCircle } from 'lucide-react';
 
 const passwordRegex = /^(?=.*[A-ZÑ])(?=.*[a-zñ])(?=.*\d)(?=.*[-@#$%^&*.,()_+{}|;:'"<>/!¡¿?])[A-ZÑa-zñ\d-@#$%^&*.,()_+{}|;:'"<>/!¡¿?]{8,}$/;
 
@@ -93,14 +94,11 @@ export function RegisterPage() {
         <div className="w-full max-w-md space-y-6">
           {/* Logo */}
           <div className="text-center space-y-4">
-            <div className="inline-flex items-center justify-center">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl blur-xl opacity-50" />
-                <div className="relative p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-xl">
-                  <Film className="h-10 w-10 text-white" />
-                </div>
-              </div>
-            </div>
+            <EleVideoLogo
+              compact
+              className="justify-center"
+              markClassName="h-20 w-20"
+            />
             <div>
               <h1 className="font-outfit text-3xl font-bold tracking-tight">
                 Únete a <span className="gradient-text">Elevideo</span>
