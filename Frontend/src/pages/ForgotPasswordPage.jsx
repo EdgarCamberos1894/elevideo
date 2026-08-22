@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { EleVideoMark } from '@/components/EleVideoLogo';
 import { toast } from 'sonner';
-import { Film, Loader2, ArrowLeft, Mail } from 'lucide-react';
+import { Loader2, ArrowLeft, Mail } from 'lucide-react';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Introduce un correo electrónico válido'),
@@ -45,8 +46,8 @@ export function ForgotPasswordPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
-            <div className="p-3 rounded-xl bg-accent/10">
-              {isSubmitted ? <Mail className="h-8 w-8 text-accent" /> : <Film className="h-8 w-8 text-accent" />}
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10">
+              {isSubmitted ? <Mail className="h-8 w-8 text-accent" /> : <EleVideoMark className="h-11 w-11" />}
             </div>
           </div>
           <CardTitle className="font-outfit text-2xl">
