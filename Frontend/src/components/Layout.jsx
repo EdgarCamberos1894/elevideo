@@ -18,10 +18,10 @@ import {
   Moon,
   Sun,
   Menu,
-  Film,
   Sparkles,
   Bell,
 } from 'lucide-react';
+import { EleVideoLogo } from '@/components/EleVideoLogo';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { requestNotificationPermission } from '@/lib/notifications';
@@ -66,21 +66,11 @@ export function Layout({ children }) {
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-[1920px] items-center justify-between px-4 sm:px-6 lg:px-8 2xl:px-12">
           {/* Logo */}
-          <Link to="/dashboard" className="flex items-center gap-3 group">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative p-2 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600">
-                <Film className="h-5 w-5 text-white" />
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-outfit text-xl font-bold tracking-tight gradient-text">
-                Elevideo
-              </span>
-              <span className="-mt-1 hidden text-xs text-muted-foreground sm:block">
-                Conversión vertical con IA
-              </span>
-            </div>
+          <Link to="/dashboard" className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+            <EleVideoLogo
+              markClassName="h-10 w-10 transition-transform duration-200 group-hover:scale-[1.04]"
+              tagline="Conversión vertical con IA"
+            />
           </Link>
 
           {/* Desktop Navigation */}
@@ -93,7 +83,7 @@ export function Layout({ children }) {
                 className={cn(
                   'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
                   isNavItemActive(item.href)
-                    ? 'bg-accent/10 text-accent' 
+                    ? 'bg-accent/10 text-accent'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                 )}
               >
@@ -202,11 +192,8 @@ export function Layout({ children }) {
               <SheetContent side="right" className="w-80">
                 <div className="flex h-full flex-col gap-6 py-6">
                   <SheetClose asChild>
-                    <Link to="/dashboard" className="flex items-center gap-3">
-                      <div className="rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-2">
-                        <Film className="h-5 w-5 text-white" />
-                      </div>
-                      <span className="font-outfit text-xl font-bold gradient-text">Elevideo</span>
+                    <Link to="/dashboard" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                      <EleVideoLogo markClassName="h-10 w-10" />
                     </Link>
                   </SheetClose>
 
